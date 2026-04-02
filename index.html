@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Zombie Sword Fight – VR</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; overflow: hidden; font-family: 'Courier New', monospace; }
+    canvas { display: block; }
+
+    #overlay {
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: radial-gradient(ellipse at center, #1a0a00 0%, #000 100%);
+      z-index: 10;
+      gap: 18px;
+    }
+    #overlay h1 {
+      font-size: clamp(2rem, 6vw, 4rem);
+      letter-spacing: 0.15em;
+      color: #e8c97a;
+      text-shadow: 0 0 40px #c4622088, 0 2px 0 #000;
+      text-transform: uppercase;
+    }
+    #overlay p {
+      color: #a08060;
+      font-size: 0.9rem;
+      letter-spacing: 0.08em;
+      text-align: center;
+      max-width: 380px;
+      line-height: 1.7;
+    }
+    .btn {
+      padding: 14px 38px;
+      font-family: inherit;
+      font-size: 1rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      border: 1px solid #c46220;
+      background: transparent;
+      color: #e8c97a;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+    .btn:hover { background: #c46220; color: #000; }
+
+    #hud {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      display: flex; justify-content: space-between; align-items: flex-start;
+      padding: 14px 22px;
+      pointer-events: none;
+      z-index: 5;
+    }
+    .hud-panel {
+      background: rgba(0,0,0,0.55);
+      border: 1px solid #c4622055;
+      padding: 8px 16px;
+      color: #e8c97a;
+      font-size: 0.78rem;
+      letter-spacing: 0.1em;
+    }
+    #health-bar-wrap { width: 160px; }
+    #health-bar {
+      height: 6px; background: #c46220;
+      margin-top: 4px;
+      transition: width 0.3s;
+    }
+    #zombie-status { text-align: right; }
+    #zombie-label { color: #7fff7f; font-weight: bold; }
+
+    #crosshair {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      width: 18px; height: 18px;
+      pointer-events: none;
+      z-index: 5;
+    }
+    #crosshair::before, #crosshair::after {
+      content: ''; position: absolute;
+      background: rgba(255,255,255,0.7);
+    }
+    #crosshair::before { width: 2px; height: 100%; left: 50%; transform: translateX(-50%); }
+    #crosshair::after  { height: 2px; width: 100%; top: 50%; transform: translateY(-50%); }
+
+    #msg {
+      position: fixed; bottom: 60px; left: 50%;
+      transform: translateX(-50%);
+      color: #fff; font-size: 0.95rem;
+      letter-spacing: 0.1em;
+      background: rgba(0,0,0,0.6);
+      padding: 8px 20px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.4s;
+      z-index: 5;
+    }
+
+    #controls-hint {
+      position: fixed; bottom: 14px; left: 50%;
+      transform: translateX(-50%);
+      color: #7a6040;
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    #vr-btn-wrap {
+      position: fixed; bottom: 14px; right: 18px;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+
+<!-- START SCREEN -->
+<div id="overlay">
+  <h1>⚔ Dead Forest</h1>
+  <p>Survive the night. Slay the undead.<br>
+     Click to lock cursor, then use WASD to move.<br>
+     Left-click to swing the sword.</p>
+  <button class="btn" id="start-btn">Enter</button>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="hud-panel" id="health-bar-wrap">
+    HEALTH
+    <div id="health-bar" style="width:100%"></div>
+  </div>
+  <div class="hud-panel" id="zombie-status">
+    ZOMBIE: <span id="zombie-label">IDLE</span><br>
+    <span id="zombie-count" style="color:#e8c97a;font-size:0.7rem">PRESS K TO TEST DIE</span>
+  </div>
+</div>
+<div id="crosshair"></div>
+<div id="msg"></div>
+<div id="controls-hint">WASD · MOUSE · SPACE=JUMP · LMB=SWING · K=KILL</div>
+<div id="vr-btn-wrap"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three":              "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/":      "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader }    from 'three/addons/loaders/GLTFLoader.js';
+import { FBXLoader }     from 'three/addons/loaders/FBXLoader.js';
+import { VRButton }      from 'three/addons/webxr/VRButton.js';
+import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+import { RGBELoader }    from 'three/addons/loaders/RGBELoader.js';
+import { Sky }           from 'three/addons/objects/Sky.js';
+
+// ─── SCENE ────────────────────────────────────────────────────────────────────
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
+renderer.toneMapping       = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.6;
+renderer.xr.enabled        = true;
+document.body.appendChild(renderer.domElement);
+
+// VR Button
+const vrBtn = VRButton.createButton(renderer);
+document.getElementById('vr-btn-wrap').appendChild(vrBtn);
+
+const scene  = new THREE.Scene();
+scene.fog    = new THREE.FogExp2(0x1a2e10, 0.018);
+
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 300);
+
+// ─── SKY ──────────────────────────────────────────────────────────────────────
+const sky = new Sky();
+sky.scale.setScalar(450);
+scene.add(sky);
+const skyUni = sky.material.uniforms;
+skyUni['turbidity'].value     = 12;
+skyUni['rayleigh'].value      = 0.5;
+skyUni['mieCoefficient'].value = 0.03;
+skyUni['mieDirectionalG'].value = 0.82;
+const sunPos = new THREE.Vector3();
+const phi    = THREE.MathUtils.degToRad(92); // just below horizon = dusk
+const theta  = THREE.MathUtils.degToRad(160);
+sunPos.setFromSphericalCoords(1, phi, theta);
+skyUni['sunPosition'].value.copy(sunPos);
+
+// ─── LIGHTING ─────────────────────────────────────────────────────────────────
+const ambLight = new THREE.AmbientLight(0x445533, 2.5);
+scene.add(ambLight);
+
+const moonLight = new THREE.DirectionalLight(0x88aaff, 2.0);
+moonLight.position.set(-30, 50, -20);
+moonLight.castShadow = true;
+moonLight.shadow.mapSize.set(2048, 2048);
+moonLight.shadow.camera.near = 0.5;
+moonLight.shadow.camera.far  = 200;
+moonLight.shadow.camera.left = moonLight.shadow.camera.bottom = -60;
+moonLight.shadow.camera.right = moonLight.shadow.camera.top  =  60;
+scene.add(moonLight);
+
+// Atmospheric orange fire torches (point lights)
+const torchPositions = [
+  [-4, 2, -10], [4, 2, -10], [-10, 2, -20], [6, 2, -20],
+  [-2, 2, -35], [5, 2, -30], [-14, 2, -30]
+];
+torchPositions.forEach(([x,y,z]) => {
+  const pt = new THREE.PointLight(0xff6a10, 8, 20, 1.5);
+  pt.position.set(x, y, z);
+  scene.add(pt);
+  // Flicker
+  pt.userData.baseIntensity = 8;
+  pt.userData.flicker = Math.random() * Math.PI * 2;
+});
+
+// ─── GROUND ───────────────────────────────────────────────────────────────────
+const groundGeo = new THREE.PlaneGeometry(200, 200, 40, 40);
+// Slightly bumpy ground via vertex displacement
+const posAttr = groundGeo.attributes.position;
+for (let i = 0; i < posAttr.count; i++) {
+  const x = posAttr.getX(i), z = posAttr.getZ(i);
+  if (Math.abs(x) > 3 || Math.abs(z) > 3) {
+    posAttr.setY(i, (Math.sin(x * 0.3) * Math.cos(z * 0.3)) * 0.25);
+  }
+}
+groundGeo.computeVertexNormals();
+const groundMat = new THREE.MeshLambertMaterial({ color: 0x1a3310 });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// ─── TREES (instanced) ────────────────────────────────────────────────────────
+function makeForest() {
+  const trunkGeo = new THREE.CylinderGeometry(0.12, 0.2, 2.5, 6);
+  const trunkMat = new THREE.MeshLambertMaterial({ color: 0x3d2010 });
+  const foliageGeo = new THREE.ConeGeometry(1.1, 3.5, 7);
+  const foliageMat = new THREE.MeshLambertMaterial({ color: 0x0d3d0a });
+
+  const count = 220;
+  const trunkIM   = new THREE.InstancedMesh(trunkGeo,   trunkMat,   count);
+  const foliageIM = new THREE.InstancedMesh(foliageGeo, foliageMat, count);
+  trunkIM.castShadow   = true;
+  foliageIM.castShadow = true;
+
+  const dummy = new THREE.Object3D();
+  const rng = (a, b) => a + Math.random() * (b - a);
+
+  let placed = 0;
+  while (placed < count) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist  = rng(10, 90);
+    const x = Math.cos(angle) * dist;
+    const z = Math.sin(angle) * dist;
+    if (Math.abs(x) < 5 && Math.abs(z) < 5) continue; // keep center clear
+
+    const scale = rng(0.7, 1.4);
+    dummy.position.set(x, 1.25 * scale, z);
+    dummy.scale.set(scale, scale, scale);
+    dummy.rotation.y = rng(0, Math.PI * 2);
+    dummy.updateMatrix();
+    trunkIM.setMatrixAt(placed, dummy.matrix);
+
+    dummy.position.set(x, 3.5 * scale, z);
+    dummy.updateMatrix();
+    foliageIM.setMatrixAt(placed, dummy.matrix);
+    placed++;
+  }
+  trunkIM.instanceMatrix.needsUpdate   = true;
+  foliageIM.instanceMatrix.needsUpdate = true;
+  scene.add(trunkIM, foliageIM);
+}
+makeForest();
+
+// ─── WALLS ────────────────────────────────────────────────────────────────────
+// Each entry: [px, py, pz, sx, sy, sz]
+const WALL_DEFS = [
+  [-3.84,  2, -9.5,    0.47, 4, 10      ],
+  [-1.55,  2, -9.5,    0.47, 4, 10      ],
+  [13.07,  2, -9.5,    0.4,  4, 77.15   ],
+  [-18.48, 2, -9.5,    0.4,  4, 50      ],
+  [-27.02, 2, -41.3,   30,   4, 0.47    ],
+  [-13.14, 2, -47.97,  53.47,4, 0.47    ],
+  [-28.28, 2, -34.27,  20,   4, 0.47    ],
+  [-2.5,   2, -17.4,   20,   4, 0.47    ],
+  [-2.25,  2, -36.04,  0.47, 4, 24.3    ],
+  [-12.26, 2, -29.4,   0.47, 4, 24.3    ],
+  [7.29,   2, -29.4,   0.47, 4, 24.3    ],
+  [5.66,   2, -14.3,   15,   4, 0.47    ],
+  [-11.1,  2, -14.3,   15,   4, 0.47    ],
+  [-2.53,  2,  15.5,   32.7, 4, 0.47    ],
+];
+
+const wallMat   = new THREE.MeshLambertMaterial({ color: 0x4a3825 });
+const wallBoxes = []; // THREE.Box3[] for collision
+
+WALL_DEFS.forEach(([px,py,pz, sx,sy,sz]) => {
+  const geo  = new THREE.BoxGeometry(sx, sy, sz);
+  const mesh = new THREE.Mesh(geo, wallMat);
+  mesh.position.set(px, py, pz);
+  mesh.castShadow    = true;
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+
+  const box = new THREE.Box3().setFromObject(mesh);
+  box.expandByScalar(0.05); // small buffer
+  wallBoxes.push(box);
+});
+
+// ─── PLAYER ───────────────────────────────────────────────────────────────────
+// The "rig" is the player object that moves. Camera is a child.
+const playerRig = new THREE.Object3D();
+playerRig.position.set(0, 0, 0);
+scene.add(playerRig);
+playerRig.add(camera);
+camera.position.set(0, 1.6, 0);
+
+// ─── POINTER LOCK / MOUSE LOOK ────────────────────────────────────────────────
+let yaw = 0, pitch = 0;
+const onMouseMove = (e) => {
+  yaw   -= e.movementX * 0.002;
+  pitch -= e.movementY * 0.002;
+  pitch  = Math.max(-1.2, Math.min(1.2, pitch));
+  camera.rotation.order = 'YXZ';
+  camera.rotation.y = yaw;
+  camera.rotation.x = pitch;
+};
+renderer.domElement.addEventListener('click', () => {
+  if (!renderer.xr.isPresenting) renderer.domElement.requestPointerLock();
+});
+document.addEventListener('pointerlockchange', () => {
+  if (document.pointerLockElement === renderer.domElement) {
+    document.addEventListener('mousemove', onMouseMove);
+  } else {
+    document.removeEventListener('mousemove', onMouseMove);
+  }
+});
+
+// ─── KEYBOARD INPUT ───────────────────────────────────────────────────────────
+const keys = {};
+window.addEventListener('keydown', e => { keys[e.code] = true;  });
+window.addEventListener('keyup',   e => { keys[e.code] = false; });
+
+// ─── JUMP / GRAVITY ───────────────────────────────────────────────────────────
+let yVel = 0, onGround = true;
+const GRAVITY = 20, JUMP_SPEED = 7, GROUND_Y = 0;
+
+window.addEventListener('keydown', e => {
+  if ((e.code === 'Space' || e.code === 'KeyJ') && onGround) {
+    yVel = JUMP_SPEED;
+    onGround = false;
+  }
+});
+
+// ─── WALL COLLISION (axis-separated sliding) ──────────────────────────────────
+const playerBox  = new THREE.Box3();
+const testBox    = new THREE.Box3();
+const PLAYER_R   = 0.45;
+const PLAYER_H   = 1.8;
+
+function overlapsWall(px, pz) {
+  const py = playerRig.position.y;
+  testBox.min.set(px - PLAYER_R, py,            pz - PLAYER_R);
+  testBox.max.set(px + PLAYER_R, py + PLAYER_H, pz + PLAYER_R);
+  for (let i = 0; i < wallBoxes.length; i++) {
+    if (testBox.intersectsBox(wallBoxes[i])) return true;
+  }
+  return false;
+}
+
+function movePlayer(dx, dz) {
+  const nx = playerRig.position.x + dx;
+  const nz = playerRig.position.z + dz;
+
+  if (!overlapsWall(nx, nz)) {
+    playerRig.position.x = nx;
+    playerRig.position.z = nz;
+    return;
+  }
+  if (!overlapsWall(nx, playerRig.position.z)) {
+    playerRig.position.x = nx;
+    return;
+  }
+  if (!overlapsWall(playerRig.position.x, nz)) {
+    playerRig.position.z = nz;
+    return;
+  }
+}
+
+// ─── SWORD (placeholder box until GLB loads) ──────────────────────────────────
+const swordHolder = new THREE.Object3D();
+camera.add(swordHolder);
+swordHolder.position.set(0.38, -0.38, -0.7);
+swordHolder.rotation.set(0, Math.PI / 2, -Math.PI / 2);
+
+// Placeholder sword box
+const swordPlaceholder = new THREE.Mesh(
+  new THREE.BoxGeometry(0.04, 0.7, 0.04),
+  new THREE.MeshLambertMaterial({ color: 0xaaaacc })
+);
+swordHolder.add(swordPlaceholder);
+
+// Swing state
+let swinging = false, swingT = 0;
+const SWING_DUR = 0.38; // seconds
+renderer.domElement.addEventListener('mousedown', e => {
+  if (e.button === 0 && !swinging) { swinging = true; swingT = 0; }
+});
+
+// ─── GLTF / FBX LOADERS ───────────────────────────────────────────────────────
+const gltfLoader = new GLTFLoader();
+const fbxLoader  = new FBXLoader();
+
+// Load sword GLB
+gltfLoader.load('3dmodels/sword.glb', (gltf) => {
+  swordHolder.remove(swordPlaceholder);
+  const s = gltf.scene;
+  s.scale.setScalar(0.8);
+  swordHolder.add(s);
+  s.traverse(c => { if (c.isMesh) { c.castShadow = true; } });
+}, undefined, () => { /* keep placeholder on error */ });
+
+// ─── ZOMBIE ───────────────────────────────────────────────────────────────────
+const zombieGroup = new THREE.Group();
+zombieGroup.position.set(0, 0, -5);
+scene.add(zombieGroup);
+
+// Placeholder capsule until GLB loads
+const zombiePlaceholder = new THREE.Group();
+const bodyM = new THREE.Mesh(
+  new THREE.CapsuleGeometry(0.35, 1.1, 4, 8),
+  new THREE.MeshLambertMaterial({ color: 0x3a5c2a })
+);
+bodyM.position.y = 1.1;
+zombiePlaceholder.add(bodyM);
+const headM = new THREE.Mesh(
+  new THREE.SphereGeometry(0.28, 8, 8),
+  new THREE.MeshLambertMaterial({ color: 0x4a6a3a })
+);
+headM.position.y = 2.1;
+zombiePlaceholder.add(headM);
+zombieGroup.add(zombiePlaceholder);
+
+// Animation state machine
+let zombieMixer   = null;
+let zombieActions = {};   // { idle, chase, die }
+let zombieState   = 'idle';
+let zombieDead    = false;
+let zombieHealth  = 100;
+
+function setZombieState(newState) {
+  if (zombieDead && newState !== 'die') return;
+  if (zombieState === newState) return;
+
+  const prev = zombieActions[zombieState];
+  const next = zombieActions[newState];
+
+  if (prev) prev.fadeOut(0.35);
+  if (next) { next.reset().fadeIn(0.35).play(); }
+
+  zombieState = newState;
+  if (newState === 'die') zombieDead = true;
+
+  const el = document.getElementById('zombie-label');
+  if (el) el.textContent = newState.toUpperCase();
+}
+
+// Load zombie GLB
+gltfLoader.load('3dmodels/zombie.glb', (gltf) => {
+  zombieGroup.remove(zombiePlaceholder);
+  const model = gltf.scene;
+  model.scale.setScalar(1.553);
+  model.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
+  zombieGroup.add(model);
+
+  zombieMixer = new THREE.AnimationMixer(model);
+  loadZombieAnimations(zombieMixer);
+}, undefined, (err) => {
+  console.warn('zombie.glb not found, using placeholder', err);
+  loadZombieAnimations(null); // still load FBX clips even for placeholder
+});
+
+function loadZombieAnimations(mixer) {
+  // Each FBX provides one clip. We retarget it onto the mixer's root.
+  const clips = [
+    { key: 'idle',  path: 'animations/zombie_idle.fbx'  },
+    { key: 'chase', path: 'animations/zombie_chase.fbx' },
+    { key: 'die',   path: 'animations/zombie_die.fbx'   },
+  ];
+
+  clips.forEach(({ key, path }) => {
+    fbxLoader.load(path, (fbx) => {
+      if (!fbx.animations || fbx.animations.length === 0) {
+        console.warn(`No animation in ${path}`);
+        return;
+      }
+      const clip = fbx.animations[0];
+      clip.name  = key;
+
+      if (mixer) {
+        const action = mixer.clipAction(clip);
+        zombieActions[key] = action;
+
+        if (key === 'die') {
+          action.setLoop(THREE.LoopOnce, 1);
+          action.clampWhenFinished = true;
+        }
+        if (key === 'idle') action.play(); // start playing idle immediately
+      }
+
+      console.log(`Loaded animation: ${key}`);
+    }, undefined, (err) => {
+      console.warn(`Could not load ${path} — animation won't play`, err);
+    });
+  });
+}
+
+// ─── TABLE (GLB) ──────────────────────────────────────────────────────────────
+gltfLoader.load('3dmodels/table.glb', (gltf) => {
+  const t = gltf.scene;
+  t.position.set(2, 0, -3);
+  t.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
+  scene.add(t);
+}, undefined, () => {
+  // Fallback box table
+  const tbl = new THREE.Mesh(
+    new THREE.BoxGeometry(1.2, 0.8, 0.6),
+    new THREE.MeshLambertMaterial({ color: 0x7a4a1a })
+  );
+  tbl.position.set(2, 0.4, -3);
+  tbl.castShadow = true;
+  scene.add(tbl);
+});
+
+// ─── VR CONTROLLERS ───────────────────────────────────────────────────────────
+const controllerModelFactory = new XRControllerModelFactory();
+
+// Right controller → sword hand
+const controller1 = renderer.xr.getController(0);
+scene.add(controller1);
+const controllerGrip1 = renderer.xr.getControllerGrip(0);
+controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
+scene.add(controllerGrip1);
+
+// Left controller
+const controller2 = renderer.xr.getController(1);
+scene.add(controller2);
+const controllerGrip2 = renderer.xr.getControllerGrip(1);
+controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
+scene.add(controllerGrip2);
+
+// Attach sword to right controller in VR
+const vrSwordHolder = new THREE.Object3D();
+vrSwordHolder.rotation.set(0, Math.PI / 2, -Math.PI / 2);
+vrSwordHolder.position.set(0, 0, -0.1);
+controller1.add(vrSwordHolder);
+
+gltfLoader.load('3dmodels/sword.glb', (gltf) => {
+  const s = gltf.scene.clone();
+  s.scale.setScalar(0.8);
+  s.traverse(c => { if (c.isMesh) c.castShadow = true; });
+  vrSwordHolder.add(s);
+}, undefined, () => {
+  const fallback = new THREE.Mesh(
+    new THREE.BoxGeometry(0.04, 0.7, 0.04),
+    new THREE.MeshLambertMaterial({ color: 0xaaaacc })
+  );
+  vrSwordHolder.add(fallback);
+});
+
+// VR swing on trigger squeeze
+controller1.addEventListener('selectstart', () => {
+  if (!swinging) { swinging = true; swingT = 0; }
+});
+
+// ─── VR LOCOMOTION (thumbstick) ───────────────────────────────────────────────
+const vrMove = new THREE.Vector2();
+renderer.xr.addEventListener('sessionstart', () => {
+  const session = renderer.xr.getSession();
+  session.addEventListener('inputsourceschange', () => {});
+});
+
+function processVRInput(frame) {
+  if (!frame) return;
+  const session = renderer.xr.getSession();
+  if (!session) return;
+  for (const src of session.inputSources) {
+    if (!src.gamepad) continue;
+    const axes = src.gamepad.axes;
+    if (src.handedness === 'left' && axes.length >= 4) {
+      vrMove.set(axes[2], axes[3]); // left thumbstick
+    }
+  }
+}
+
+// ─── PARTICLE BLOOD SPLASH (on hit) ───────────────────────────────────────────
+const bloodParticles = [];
+const bloodGeo = new THREE.BufferGeometry();
+const bCount   = 40;
+const bPositions = new Float32Array(bCount * 3);
+bloodGeo.setAttribute('position', new THREE.BufferAttribute(bPositions, 3));
+const bloodMat    = new THREE.PointsMaterial({ color: 0xcc0000, size: 0.08 });
+const bloodSystem = new THREE.Points(bloodGeo, bloodMat);
+bloodSystem.visible = false;
+scene.add(bloodSystem);
+
+let bloodActive = false, bloodT = 0;
+const bloodVels = Array.from({ length: bCount }, () => new THREE.Vector3(
+  (Math.random()-0.5)*4, Math.random()*5, (Math.random()-0.5)*4
+));
+
+function spawnBlood(pos) {
+  bloodSystem.position.copy(pos);
+  bloodSystem.position.y += 1.2;
+  for (let i = 0; i < bCount; i++) {
+    bPositions[i*3]   = 0;
+    bPositions[i*3+1] = 0;
+    bPositions[i*3+2] = 0;
+  }
+  bloodGeo.attributes.position.needsUpdate = true;
+  bloodSystem.visible = true;
+  bloodActive = true;
+  bloodT = 0;
+}
+
+// ─── TORCH FLICKER OBJECTS ────────────────────────────────────────────────────
+const torchLights = scene.children.filter(c => c.isPointLight);
+
+// ─── HIT DETECTION ────────────────────────────────────────────────────────────
+const swordWorldPos  = new THREE.Vector3();
+const zombieWorldPos = new THREE.Vector3();
+
+function checkSwordHit() {
+  if (!swinging || zombieDead) return;
+  // Get sword tip world position
+  swordHolder.getWorldPosition(swordWorldPos);
+  swordWorldPos.y += 0.35; // tip offset
+  zombieGroup.getWorldPosition(zombieWorldPos);
+  zombieWorldPos.y += 1.0;
+  const dist = swordWorldPos.distanceTo(zombieWorldPos);
+  if (dist < 1.8) {
+    zombieHealth -= 34;
+    spawnBlood(zombieWorldPos);
+    showMsg('HIT! ' + Math.max(0, zombieHealth) + ' HP');
+    if (zombieHealth <= 0) {
+      setZombieState('die');
+      showMsg('ZOMBIE SLAIN!');
+    }
+  }
+}
+
+// ─── MESSAGE HELPER ───────────────────────────────────────────────────────────
+let msgTimer = null;
+function showMsg(txt) {
+  const el = document.getElementById('msg');
+  if (!el) return;
+  el.textContent = txt;
+  el.style.opacity = '1';
+  clearTimeout(msgTimer);
+  msgTimer = setTimeout(() => { el.style.opacity = '0'; }, 1800);
+}
+
+// ─── KILL KEY ─────────────────────────────────────────────────────────────────
+window.addEventListener('keydown', e => {
+  if (e.code === 'KeyK' && !zombieDead) {
+    zombieHealth = 0;
+    setZombieState('die');
+    showMsg('ZOMBIE SLAIN!');
+  }
+});
+
+// ─── PLAYER HEALTH ────────────────────────────────────────────────────────────
+let playerHealth = 100;
+let lastAttackTime = 0;
+const ATTACK_COOLDOWN = 1.2; // seconds between zombie hits
+
+function damagePlayer(dt) {
+  const now = performance.now() / 1000;
+  if (now - lastAttackTime < ATTACK_COOLDOWN) return;
+  lastAttackTime = now;
+  playerHealth = Math.max(0, playerHealth - 15);
+  const bar = document.getElementById('health-bar');
+  if (bar) bar.style.width = playerHealth + '%';
+  // Red flash
+  const flash = document.createElement('div');
+  flash.style.cssText = 'position:fixed;inset:0;background:rgba(200,0,0,0.35);pointer-events:none;z-index:999;transition:opacity 0.4s';
+  document.body.appendChild(flash);
+  setTimeout(() => { flash.style.opacity = '0'; }, 50);
+  setTimeout(() => flash.remove(), 500);
+  if (playerHealth <= 0) showMsg('YOU DIED...');
+  else showMsg('OUCH! ' + playerHealth + ' HP');
+}
+
+
+const CHASE_RANGE  = 12;
+const ATTACK_RANGE = 2;
+const ZOMBIE_SPEED = 0.04;
+const zombieDir    = new THREE.Vector3();
+const playerPos    = new THREE.Vector3();
+
+function updateZombieAI(dt) {
+  if (zombieDead) return;
+  playerRig.getWorldPosition(playerPos);
+  zombieGroup.getWorldPosition(zombieWorldPos);
+
+  zombieDir.subVectors(playerPos, zombieWorldPos);
+  zombieDir.y = 0;
+  const dist = zombieDir.length();
+
+  if (dist > CHASE_RANGE) {
+    setZombieState('idle');
+  } else if (dist > ATTACK_RANGE) {
+    setZombieState('chase');
+    zombieDir.normalize();
+    zombieGroup.position.addScaledVector(zombieDir, ZOMBIE_SPEED);
+    zombieGroup.lookAt(playerPos.x, zombieGroup.position.y, playerPos.z);
+  } else {
+    // In attack range — zombie attacks player
+    setZombieState('chase');
+    zombieGroup.lookAt(playerPos.x, zombieGroup.position.y, playerPos.z);
+    damagePlayer(dt);
+  }
+}
+
+// ─── PLAYER MOVEMENT ──────────────────────────────────────────────────────────
+const moveDir  = new THREE.Vector3();
+const camFwd   = new THREE.Vector3();
+const camRight = new THREE.Vector3();
+
+function updatePlayerMovement(dt) {
+  // Desktop keyboard
+  const forward = (keys['KeyW'] || keys['ArrowUp'])    ? 1 : 0;
+  const back    = (keys['KeyS'] || keys['ArrowDown'])  ? 1 : 0;
+  const left    = (keys['KeyA'] || keys['ArrowLeft'])  ? 1 : 0;
+  const right   = (keys['KeyD'] || keys['ArrowRight']) ? 1 : 0;
+
+  // Derive forward/right from camera yaw only (not pitch)
+  camFwd.set(Math.sin(yaw + Math.PI), 0, Math.cos(yaw + Math.PI));
+  camRight.set(Math.cos(yaw), 0, -Math.sin(yaw));
+
+  moveDir.set(0, 0, 0);
+  moveDir.addScaledVector(camFwd,   forward - back);
+  moveDir.addScaledVector(camRight, right   - left);
+
+  // VR thumbstick
+  if (renderer.xr.isPresenting && vrMove.lengthSq() > 0.01) {
+    const refSpace = renderer.xr.getReferenceSpace();
+    const hmdFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    hmdFwd.y = 0; hmdFwd.normalize();
+    const hmdRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+    hmdRight.y = 0; hmdRight.normalize();
+    moveDir.addScaledVector(hmdFwd,   -vrMove.y);
+    moveDir.addScaledVector(hmdRight,  vrMove.x);
+  }
+
+  if (moveDir.lengthSq() > 0) {
+    moveDir.normalize();
+    const speed = 4.5;
+    movePlayer(moveDir.x * speed * dt, moveDir.z * speed * dt);
+  }
+
+  // Gravity + jump
+  if (!onGround) {
+    yVel -= GRAVITY * dt;
+    playerRig.position.y += yVel * dt;
+    if (playerRig.position.y <= GROUND_Y) {
+      playerRig.position.y = GROUND_Y;
+      yVel = 0;
+      onGround = true;
+    }
+  }
+}
+
+// ─── SWORD SWING ANIMATION ────────────────────────────────────────────────────
+const SWING_ROTATION_START = new THREE.Euler(0, 0, 0);
+let hitCheckedThisSwing = false;
+
+function updateSwordSwing(dt) {
+  if (!swinging) return;
+  swingT += dt / SWING_DUR;
+
+  if (swingT < 1) {
+    // Arc: rotate forward then back
+    const t = swingT;
+    const arc = Math.sin(t * Math.PI); // 0→1→0
+    swordHolder.rotation.x = -arc * 1.4; // swing forward
+    swordHolder.rotation.z = arc * 0.3;  // slight diagonal
+    // Check hit at peak
+    if (t > 0.35 && t < 0.65 && !hitCheckedThisSwing) {
+      hitCheckedThisSwing = true;
+      checkSwordHit();
+    }
+  } else {
+    swordHolder.rotation.x = 0;
+    swordHolder.rotation.z = 0;
+    swinging = false;
+    hitCheckedThisSwing = false;
+  }
+}
+
+// ─── CLOCK ────────────────────────────────────────────────────────────────────
+const clock = new THREE.Clock();
+
+// ─── START BUTTON ─────────────────────────────────────────────────────────────
+document.getElementById('start-btn').addEventListener('click', () => {
+  document.getElementById('overlay').style.display = 'none';
+  renderer.domElement.requestPointerLock?.();
+  clock.start();
+});
+
+// ─── RESIZE ───────────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ─── RENDER LOOP ──────────────────────────────────────────────────────────────
+renderer.setAnimationLoop((timestamp, frame) => {
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  processVRInput(frame);
+  updatePlayerMovement(dt);
+  updateSwordSwing(dt);
+  updateZombieAI(dt);
+
+  // Advance zombie animation mixer
+  if (zombieMixer) zombieMixer.update(dt);
+
+  // Torch flicker
+  const t = performance.now() * 0.001;
+  scene.children.forEach(c => {
+    if (c.isPointLight && c.userData.baseIntensity !== undefined) {
+      c.userData.flicker += dt * 8;
+      const flicker = c.userData.flicker;
+      c.intensity = c.userData.baseIntensity
+        + Math.sin(flicker * 3.7) * 0.4
+        + Math.sin(flicker * 7.1) * 0.2;
+    }
+  });
+
+  // Blood particle update
+  if (bloodActive) {
+    bloodT += dt;
+    for (let i = 0; i < bCount; i++) {
+      bPositions[i*3]   += bloodVels[i].x * dt;
+      bPositions[i*3+1] += (bloodVels[i].y - 9.8 * bloodT) * dt;
+      bPositions[i*3+2] += bloodVels[i].z * dt;
+    }
+    bloodGeo.attributes.position.needsUpdate = true;
+    if (bloodT > 1.0) {
+      bloodSystem.visible = false;
+      bloodActive = false;
+    }
+  }
+
+  // In VR mode, sync rig position to XR camera rig
+  if (renderer.xr.isPresenting) {
+    // XR handles camera transforms; keep HUD elements in scene
+  }
+
+  renderer.render(scene, camera);
+});
+
+</script>
+</body>
+</html>
