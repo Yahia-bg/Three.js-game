@@ -1,877 +1,1295 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Zombie Sword Fight – VR</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DEADZONE</title>
+  <link href="https://fonts.googleapis.com/css2?family=Creepster&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #000; overflow: hidden; font-family: 'Courier New', monospace; }
-    canvas { display: block; }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
-    #overlay {
-      position: fixed; inset: 0;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      background: radial-gradient(ellipse at center, #1a0a00 0%, #000 100%);
+    :root {
+      --red: #c0392b;
+      --red-dark: #7b241c;
+      --red-glow: rgba(192, 57, 43, 0.6);
+      --off-white: #e8e0d0;
+      --muted: #9a8f82;
+      --bg: #0a0a0a;
+      --ui-luminosity: 1.18;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg);
+      overflow: hidden;
+      font-family: 'Share Tech Mono', monospace;
+      color: var(--off-white);
+    }
+
+    #bg-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+    }
+
+    #vignette {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.72) 100%);
+      pointer-events: none;
+    }
+
+    #scanlines {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent,
+        transparent 3px,
+        rgba(0,0,0,0.045) 3px,
+        rgba(0,0,0,0.045) 4px
+      );
+      pointer-events: none;
+      animation: flicker 8s infinite;
+    }
+
+    @keyframes flicker {
+      0%, 97%, 100% { opacity: 1; }
+      98% { opacity: 0.7; }
+      99% { opacity: 1; }
+      99.5% { opacity: 0.5; }
+    }
+
+    #ui {
+      position: fixed;
+      inset: 0;
       z-index: 10;
-      gap: 18px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      padding: 2rem;
     }
-    #overlay h1 {
-      font-size: clamp(2rem, 6vw, 4rem);
-      letter-spacing: 0.15em;
-      color: #e8c97a;
-      text-shadow: 0 0 40px #c4622088, 0 2px 0 #000;
-      text-transform: uppercase;
-    }
-    #overlay p {
-      color: #a08060;
-      font-size: 0.9rem;
-      letter-spacing: 0.08em;
+
+    .title-wrap {
       text-align: center;
-      max-width: 380px;
-      line-height: 1.7;
+      margin-bottom: 3rem;
+      animation: titleIn 1.2s cubic-bezier(0.16, 1, 0.3, 1) both;
     }
-    .btn {
-      padding: 14px 38px;
-      font-family: inherit;
-      font-size: 1rem;
-      letter-spacing: 0.12em;
+
+    .subtitle-tag {
+      font-size: 0.65rem;
+      letter-spacing: 0.4em;
+      color: var(--red);
       text-transform: uppercase;
-      border: 1px solid #c46220;
+      margin-bottom: 0.5rem;
+      animation: blink 3s step-start infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    .game-title {
+      font-family: 'Creepster', cursive;
+      font-size: clamp(5rem, 14vw, 11rem);
+      line-height: 0.9;
+      color: var(--off-white);
+      text-shadow:
+        0 0 20px var(--red-glow),
+        0 0 60px var(--red-glow),
+        3px 3px 0 var(--red-dark);
+      letter-spacing: 0.05em;
+      position: relative;
+    }
+
+    .game-title span { color: var(--red); }
+
+    .tagline {
+      font-size: 0.7rem;
+      letter-spacing: 0.3em;
+      color: var(--muted);
+      margin-top: 0.75rem;
+      text-transform: uppercase;
+    }
+
+    @keyframes titleIn {
+      from { opacity: 0; transform: translateY(-30px) scale(0.95); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .menu {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      width: 100%;
+      max-width: 340px;
+    }
+
+    .menu-btn {
+      width: 100%;
+      padding: 0.85rem 2rem;
       background: transparent;
-      color: #e8c97a;
+      border: 1px solid rgba(192, 57, 43, 0.5);
+      color: var(--off-white);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.95rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
       cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.2s, color 0.2s;
+      outline: none;
+      clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+    }
+
+    .menu-btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--red);
+      transform: translateX(-105%);
+      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: -1;
+    }
+
+    .menu-btn:hover { color: #fff; border-color: var(--red); }
+    .menu-btn:hover::before { transform: translateX(0); }
+    .menu-btn:active { transform: scale(0.98); }
+
+    .menu-btn.primary {
+      border-color: var(--red);
+      font-size: 1.1rem;
+      letter-spacing: 0.3em;
+      padding: 1rem 2rem;
+    }
+
+    .menu-btn.disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .coming-soon-label {
+      font-size: 0.55rem;
+      letter-spacing: 0.2em;
+      color: var(--red);
+      display: block;
+      margin-top: 2px;
+    }
+
+    /* VR button styling */
+    #vr-btn-wrap {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+      display: none;
+    }
+
+    #vr-btn-wrap.visible { display: block; }
+
+    #btn-enter-vr {
+      padding: 0.75rem 2rem;
+      background: transparent;
+      border: 1px solid rgba(192, 57, 43, 0.8);
+      color: var(--off-white);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.85rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      cursor: pointer;
+      clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
       transition: background 0.2s, color 0.2s;
     }
-    .btn:hover { background: #c46220; color: #000; }
 
+    #btn-enter-vr:hover { background: var(--red); color: #fff; }
+
+    /* HUD (visible during game) */
     #hud {
       position: fixed;
-      top: 0; left: 0; right: 0;
-      display: flex; justify-content: space-between; align-items: flex-start;
-      padding: 14px 22px;
+      inset: 0;
+      z-index: 15;
       pointer-events: none;
-      z-index: 5;
+      display: none;
     }
-    .hud-panel {
-      background: rgba(0,0,0,0.55);
-      border: 1px solid #c4622055;
-      padding: 8px 16px;
-      color: #e8c97a;
-      font-size: 0.78rem;
-      letter-spacing: 0.1em;
-    }
-    #health-bar-wrap { width: 160px; }
-    #health-bar {
-      height: 6px; background: #c46220;
-      margin-top: 4px;
-      transition: width 0.3s;
-    }
-    #zombie-status { text-align: right; }
-    #zombie-label { color: #7fff7f; font-weight: bold; }
+
+    #hud.active { display: block; }
 
     #crosshair {
-      position: fixed;
+      position: absolute;
       top: 50%; left: 50%;
-      transform: translate(-50%,-50%);
-      width: 18px; height: 18px;
-      pointer-events: none;
-      z-index: 5;
+      transform: translate(-50%, -50%);
+      width: 20px; height: 20px;
     }
+
     #crosshair::before, #crosshair::after {
-      content: ''; position: absolute;
-      background: rgba(255,255,255,0.7);
+      content: '';
+      position: absolute;
+      background: rgba(192,57,43,0.7);
     }
-    #crosshair::before { width: 2px; height: 100%; left: 50%; transform: translateX(-50%); }
-    #crosshair::after  { height: 2px; width: 100%; top: 50%; transform: translateY(-50%); }
 
-    #msg {
-      position: fixed; bottom: 60px; left: 50%;
+    #crosshair::before { width: 2px; height: 100%; top: 0; left: 50%; transform: translateX(-50%); }
+    #crosshair::after  { width: 100%; height: 2px; top: 50%; left: 0; transform: translateY(-50%); }
+
+    #coords {
+      position: absolute;
+      bottom: 1.5rem;
+      left: 1.5rem;
+      font-size: 0.6rem;
+      letter-spacing: 0.15em;
+      color: rgba(255,120,100,0.78);
+    }
+
+    #escape-hint {
+      position: absolute;
+      top: 1rem;
+      left: 50%;
       transform: translateX(-50%);
-      color: #fff; font-size: 0.95rem;
-      letter-spacing: 0.1em;
-      background: rgba(0,0,0,0.6);
-      padding: 8px 20px;
-      pointer-events: none;
+      font-size: 0.55rem;
+      letter-spacing: 0.25em;
+      color: rgba(154,143,130,0.4);
+      text-transform: uppercase;
+      pointer-events: all;
+      cursor: pointer;
+    }
+
+    /* Settings Modal */
+    #settings-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.8);
       opacity: 0;
-      transition: opacity 0.4s;
-      z-index: 5;
-    }
-
-    #controls-hint {
-      position: fixed; bottom: 14px; left: 50%;
-      transform: translateX(-50%);
-      color: #7a6040;
-      font-size: 0.72rem;
-      letter-spacing: 0.1em;
       pointer-events: none;
-      z-index: 5;
+      transition: opacity 0.25s;
     }
 
-    #vr-btn-wrap {
-      position: fixed; bottom: 14px; right: 18px;
+    #settings-modal.open { opacity: 1; pointer-events: all; }
+
+    .modal-box {
+      background: #111;
+      border: 1px solid rgba(192, 57, 43, 0.4);
+      padding: 2rem 2.5rem;
+      width: min(420px, 90vw);
+      position: relative;
+      transform: translateY(20px);
+      transition: transform 0.25s;
+      clip-path: polygon(12px 0%, 100% 0%, calc(100% - 12px) 100%, 0% 100%);
+    }
+
+    #settings-modal.open .modal-box { transform: translateY(0); }
+
+    .modal-title {
+      font-family: 'Creepster', cursive;
+      font-size: 2rem;
+      color: var(--red);
+      margin-bottom: 1.5rem;
+      letter-spacing: 0.05em;
+    }
+
+    .setting-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .setting-label {
+      font-size: 0.8rem;
+      letter-spacing: 0.15em;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .setting-value { font-size: 0.85rem; color: var(--off-white); }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 120px;
+      height: 3px;
+      background: rgba(192,57,43,0.3);
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px; height: 14px;
+      background: var(--red);
+      cursor: pointer;
+      clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+    }
+
+    .toggle {
+      width: 40px; height: 20px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(192,57,43,0.4);
+      cursor: pointer;
+      position: relative;
+      transition: background 0.2s;
+    }
+
+    .toggle.on { background: var(--red-dark); }
+
+    .toggle::after {
+      content: '';
+      position: absolute;
+      top: 2px; left: 2px;
+      width: 14px; height: 14px;
+      background: var(--muted);
+      transition: transform 0.2s, background 0.2s;
+    }
+
+    .toggle.on::after { transform: translateX(20px); background: var(--off-white); }
+
+    .modal-close { margin-top: 1.5rem; width: 100%; }
+
+    .blood-top {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 60px;
+      z-index: 3;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-around;
+      pointer-events: none;
+    }
+
+    .drip {
+      width: 6px;
+      background: var(--red-dark);
+      border-radius: 0 0 4px 4px;
+      animation: drip-fall linear infinite;
+      opacity: 0.7;
+    }
+
+    @keyframes drip-fall {
+      0%   { height: 0; opacity: 0.8; }
+      60%  { height: var(--drip-h); opacity: 0.8; }
+      100% { height: var(--drip-h); opacity: 0; }
+    }
+
+    .menu .menu-btn {
+      opacity: 0;
+      animation: menuIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    .menu .menu-btn:nth-child(1) { animation-delay: 0.6s; }
+    .menu .menu-btn:nth-child(2) { animation-delay: 0.75s; }
+    .menu .menu-btn:nth-child(3) { animation-delay: 0.9s; }
+
+    @keyframes menuIn {
+      from { opacity: 0; transform: translateX(-20px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    .version {
+      position: fixed;
+      bottom: 1rem;
+      right: 1.5rem;
+      font-size: 0.6rem;
+      letter-spacing: 0.2em;
+      color: rgba(154,143,130,0.4);
       z-index: 10;
     }
+
+    /* Mobile move pad */
+    #move-pad {
+      position: fixed;
+      bottom: 3rem;
+      left: 2rem;
+      z-index: 20;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      pointer-events: all;
+    }
+
+    #move-pad.active { display: flex; }
+    #move-pad-row { display: flex; gap: 4px; }
+
+    .pad-btn {
+      width: 48px; height: 48px;
+      background: rgba(192,57,43,0.2);
+      border: 1px solid rgba(192,57,43,0.4);
+      color: var(--off-white);
+      font-size: 1.2rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+
+    .pad-btn:active { background: rgba(192,57,43,0.5); }
   </style>
 </head>
 <body>
 
-<!-- START SCREEN -->
-<div id="overlay">
-  <h1>⚔ Dead Forest</h1>
-  <p>Survive the night. Slay the undead.<br>
-     Click to lock cursor, then use WASD to move.<br>
-     Left-click to swing the sword.</p>
-  <button class="btn" id="start-btn">Enter</button>
+<canvas id="bg-canvas"></canvas>
+<div id="vignette"></div>
+<div id="scanlines"></div>
+<div class="blood-top" id="drips"></div>
+
+<!-- Main Menu -->
+<div id="ui">
+  <div class="title-wrap">
+    <div class="subtitle-tag">&#9632; survival horror &#9632;</div>
+    <h1 class="game-title">DEAD<span>ZONE</span></h1>
+    <p class="tagline">nowhere left to run</p>
+  </div>
+  <nav class="menu">
+    <button class="menu-btn primary" id="btn-play">&#9654; &nbsp; Play</button>
+    <button class="menu-btn" id="btn-settings">&#9881; &nbsp; Settings</button>
+    <button class="menu-btn disabled">
+      &#128257; &nbsp; Multiplayer
+      <span class="coming-soon-label">&#9632; coming soon &#9632;</span>
+    </button>
+  </nav>
 </div>
 
-<!-- HUD -->
+<!-- In-game HUD -->
 <div id="hud">
-  <div class="hud-panel" id="health-bar-wrap">
-    HEALTH
-    <div id="health-bar" style="width:100%"></div>
-  </div>
-  <div class="hud-panel" id="zombie-status">
-    ZOMBIE: <span id="zombie-label">IDLE</span><br>
-    <span id="zombie-count" style="color:#e8c97a;font-size:0.7rem">PRESS K TO TEST DIE</span>
+  <div id="crosshair"></div>
+  <div id="coords">SECTOR 0,0</div>
+  <div id="escape-hint" id="btn-back-menu">&#9632; ESC — MENU</div>
+</div>
+
+<!-- VR Enter Button -->
+<div id="vr-btn-wrap">
+  <button id="btn-enter-vr">&#128097; Enter VR</button>
+</div>
+
+<!-- Mobile D-pad -->
+<div id="move-pad">
+  <button class="pad-btn" id="pad-fwd">▲</button>
+  <div id="move-pad-row">
+    <button class="pad-btn" id="pad-left">◀</button>
+    <button class="pad-btn" id="pad-back">▼</button>
+    <button class="pad-btn" id="pad-right">▶</button>
   </div>
 </div>
-<div id="crosshair"></div>
-<div id="msg"></div>
-<div id="controls-hint">WASD · MOUSE · SPACE=JUMP · LMB=SWING · K=KILL</div>
-<div id="vr-btn-wrap"></div>
 
-<script type="importmap">
-{
-  "imports": {
-    "three":              "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
-    "three/addons/":      "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
-  }
-}
-</script>
+<div class="version">v0.2.0-alpha · VR</div>
 
-<script type="module">
-import * as THREE from 'three';
-import { GLTFLoader }    from 'three/addons/loaders/GLTFLoader.js';
-import { FBXLoader }     from 'three/addons/loaders/FBXLoader.js';
-import { VRButton }      from 'three/addons/webxr/VRButton.js';
-import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
-import { RGBELoader }    from 'three/addons/loaders/RGBELoader.js';
-import { Sky }           from 'three/addons/objects/Sky.js';
+<!-- Settings modal -->
+<div id="settings-modal">
+  <div class="modal-box">
+    <div class="modal-title">Settings</div>
+    <div class="setting-row">
+      <span class="setting-label">Master Volume</span>
+      <div style="display:flex;align-items:center;gap:10px">
+        <input type="range" min="0" max="100" value="80" id="vol-master" />
+        <span class="setting-value" id="vol-master-val">80</span>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span class="setting-label">SFX Volume</span>
+      <div style="display:flex;align-items:center;gap:10px">
+        <input type="range" min="0" max="100" value="70" id="vol-sfx" />
+        <span class="setting-value" id="vol-sfx-val">70</span>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span class="setting-label">Fullscreen</span>
+      <div class="toggle on" id="toggle-fullscreen"></div>
+    </div>
+    <div class="setting-row">
+      <span class="setting-label">Gore Effects</span>
+      <div class="toggle on" id="toggle-gore"></div>
+    </div>
+    <div class="setting-row">
+      <span class="setting-label">Motion Blur</span>
+      <div class="toggle" id="toggle-blur"></div>
+    </div>
+    <div class="setting-row">
+      <span class="setting-label">VR Comfort Mode</span>
+      <div class="toggle on" id="toggle-vr-comfort"></div>
+    </div>
+    <button class="menu-btn modal-close" id="btn-close-settings">Close</button>
+  </div>
+</div>
 
-// ─── SCENE ────────────────────────────────────────────────────────────────────
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════════
+//  GLOBALS
+// ═══════════════════════════════════════════════════════════════════
+const canvas = document.getElementById('bg-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x0a0a0a);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
-renderer.toneMapping       = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.6;
-renderer.xr.enabled        = true;
-document.body.appendChild(renderer.domElement);
+renderer.shadowMap.type = THREE.BasicShadowMap;
 
-// VR Button
-const vrBtn = VRButton.createButton(renderer);
-document.getElementById('vr-btn-wrap').appendChild(vrBtn);
+// Global luminosity / exposure
+let luminosity = 2.1;
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.LinearToneMapping;
+renderer.toneMappingExposure = luminosity;
 
-const scene  = new THREE.Scene();
-scene.fog    = new THREE.FogExp2(0x1a2e10, 0.018);
+// Enable WebXR
+renderer.xr = renderer.xr || {};
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 300);
+// We'll check for native XR support
+let vrSupported = false;
+let vrSession = null;
+let xrReferenceSpace = null;
 
-// ─── SKY ──────────────────────────────────────────────────────────────────────
-const sky = new Sky();
-sky.scale.setScalar(450);
-scene.add(sky);
-const skyUni = sky.material.uniforms;
-skyUni['turbidity'].value     = 12;
-skyUni['rayleigh'].value      = 0.5;
-skyUni['mieCoefficient'].value = 0.03;
-skyUni['mieDirectionalG'].value = 0.82;
-const sunPos = new THREE.Vector3();
-const phi    = THREE.MathUtils.degToRad(92); // just below horizon = dusk
-const theta  = THREE.MathUtils.degToRad(160);
-sunPos.setFromSphericalCoords(1, phi, theta);
-skyUni['sunPosition'].value.copy(sunPos);
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x0a0a0a, 0.05);
 
-// ─── LIGHTING ─────────────────────────────────────────────────────────────────
-const ambLight = new THREE.AmbientLight(0x445533, 2.5);
-scene.add(ambLight);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 60);
 
-const moonLight = new THREE.DirectionalLight(0x88aaff, 2.0);
-moonLight.position.set(-30, 50, -20);
-moonLight.castShadow = true;
-moonLight.shadow.mapSize.set(2048, 2048);
-moonLight.shadow.camera.near = 0.5;
-moonLight.shadow.camera.far  = 200;
-moonLight.shadow.camera.left = moonLight.shadow.camera.bottom = -60;
-moonLight.shadow.camera.right = moonLight.shadow.camera.top  =  60;
-scene.add(moonLight);
-
-// Atmospheric orange fire torches (point lights)
-const torchPositions = [
-  [-4, 2, -10], [4, 2, -10], [-10, 2, -20], [6, 2, -20],
-  [-2, 2, -35], [5, 2, -30], [-14, 2, -30]
-];
-torchPositions.forEach(([x,y,z]) => {
-  const pt = new THREE.PointLight(0xff6a10, 8, 20, 1.5);
-  pt.position.set(x, y, z);
-  scene.add(pt);
-  // Flicker
-  pt.userData.baseIntensity = 8;
-  pt.userData.flicker = Math.random() * Math.PI * 2;
-});
-
-// ─── GROUND ───────────────────────────────────────────────────────────────────
-const groundGeo = new THREE.PlaneGeometry(200, 200, 40, 40);
-// Slightly bumpy ground via vertex displacement
-const posAttr = groundGeo.attributes.position;
-for (let i = 0; i < posAttr.count; i++) {
-  const x = posAttr.getX(i), z = posAttr.getZ(i);
-  if (Math.abs(x) > 3 || Math.abs(z) > 3) {
-    posAttr.setY(i, (Math.sin(x * 0.3) * Math.cos(z * 0.3)) * 0.25);
-  }
-}
-groundGeo.computeVertexNormals();
-const groundMat = new THREE.MeshLambertMaterial({ color: 0x1a3310 });
-const ground = new THREE.Mesh(groundGeo, groundMat);
-ground.rotation.x = -Math.PI / 2;
-ground.receiveShadow = true;
-scene.add(ground);
-
-// ─── TREES (instanced) ────────────────────────────────────────────────────────
-function makeForest() {
-  const trunkGeo = new THREE.CylinderGeometry(0.12, 0.2, 2.5, 6);
-  const trunkMat = new THREE.MeshLambertMaterial({ color: 0x3d2010 });
-  const foliageGeo = new THREE.ConeGeometry(1.1, 3.5, 7);
-  const foliageMat = new THREE.MeshLambertMaterial({ color: 0x0d3d0a });
-
-  const count = 220;
-  const trunkIM   = new THREE.InstancedMesh(trunkGeo,   trunkMat,   count);
-  const foliageIM = new THREE.InstancedMesh(foliageGeo, foliageMat, count);
-  trunkIM.castShadow   = true;
-  foliageIM.castShadow = true;
-
-  const dummy = new THREE.Object3D();
-  const rng = (a, b) => a + Math.random() * (b - a);
-
-  let placed = 0;
-  while (placed < count) {
-    const angle = Math.random() * Math.PI * 2;
-    const dist  = rng(10, 90);
-    const x = Math.cos(angle) * dist;
-    const z = Math.sin(angle) * dist;
-    if (Math.abs(x) < 5 && Math.abs(z) < 5) continue; // keep center clear
-
-    const scale = rng(0.7, 1.4);
-    dummy.position.set(x, 1.25 * scale, z);
-    dummy.scale.set(scale, scale, scale);
-    dummy.rotation.y = rng(0, Math.PI * 2);
-    dummy.updateMatrix();
-    trunkIM.setMatrixAt(placed, dummy.matrix);
-
-    dummy.position.set(x, 3.5 * scale, z);
-    dummy.updateMatrix();
-    foliageIM.setMatrixAt(placed, dummy.matrix);
-    placed++;
-  }
-  trunkIM.instanceMatrix.needsUpdate   = true;
-  foliageIM.instanceMatrix.needsUpdate = true;
-  scene.add(trunkIM, foliageIM);
-}
-makeForest();
-
-// ─── WALLS ────────────────────────────────────────────────────────────────────
-// Each entry: [px, py, pz, sx, sy, sz]
-const WALL_DEFS = [
-  [-3.84,  2, -9.5,    0.47, 4, 10      ],
-  [-1.55,  2, -9.5,    0.47, 4, 10      ],
-  [13.07,  2, -9.5,    0.4,  4, 77.15   ],
-  [-18.48, 2, -9.5,    0.4,  4, 50      ],
-  [-27.02, 2, -41.3,   30,   4, 0.47    ],
-  [-13.14, 2, -47.97,  53.47,4, 0.47    ],
-  [-28.28, 2, -34.27,  20,   4, 0.47    ],
-  [-2.5,   2, -17.4,   20,   4, 0.47    ],
-  [-2.25,  2, -36.04,  0.47, 4, 24.3    ],
-  [-12.26, 2, -29.4,   0.47, 4, 24.3    ],
-  [7.29,   2, -29.4,   0.47, 4, 24.3    ],
-  [5.66,   2, -14.3,   15,   4, 0.47    ],
-  [-11.1,  2, -14.3,   15,   4, 0.47    ],
-  [-2.53,  2,  15.5,   32.7, 4, 0.47    ],
-];
-
-const wallMat   = new THREE.MeshLambertMaterial({ color: 0x4a3825 });
-const wallBoxes = []; // THREE.Box3[] for collision
-
-WALL_DEFS.forEach(([px,py,pz, sx,sy,sz]) => {
-  const geo  = new THREE.BoxGeometry(sx, sy, sz);
-  const mesh = new THREE.Mesh(geo, wallMat);
-  mesh.position.set(px, py, pz);
-  mesh.castShadow    = true;
-  mesh.receiveShadow = true;
-  scene.add(mesh);
-
-  const box = new THREE.Box3().setFromObject(mesh);
-  box.expandByScalar(0.05); // small buffer
-  wallBoxes.push(box);
-});
-
-// ─── PLAYER ───────────────────────────────────────────────────────────────────
-// The "rig" is the player object that moves. Camera is a child.
+// Player rig: yaw object holds camera for mouse look
 const playerRig = new THREE.Object3D();
-playerRig.position.set(0, 0, 0);
+playerRig.position.set(1.5, 0, 1.5); // start at maze cell centre
 scene.add(playerRig);
 playerRig.add(camera);
-camera.position.set(0, 1.6, 0);
+camera.position.set(0, 1.65, 0);
 
-// ─── POINTER LOCK / MOUSE LOOK ────────────────────────────────────────────────
-let yaw = 0, pitch = 0;
-const onMouseMove = (e) => {
-  yaw   -= e.movementX * 0.002;
-  pitch -= e.movementY * 0.002;
-  pitch  = Math.max(-1.2, Math.min(1.2, pitch));
-  camera.rotation.order = 'YXZ';
-  camera.rotation.y = yaw;
-  camera.rotation.x = pitch;
-};
-renderer.domElement.addEventListener('click', () => {
-  if (!renderer.xr.isPresenting) renderer.domElement.requestPointerLock();
-});
-document.addEventListener('pointerlockchange', () => {
-  if (document.pointerLockElement === renderer.domElement) {
-    document.addEventListener('mousemove', onMouseMove);
-  } else {
-    document.removeEventListener('mousemove', onMouseMove);
-  }
-});
+// ═══════════════════════════════════════════════════════════════════
+//  MENU SCENE (background)
+// ═══════════════════════════════════════════════════════════════════
+const menuScene = new THREE.Scene();
+menuScene.fog = new THREE.FogExp2(0x0a0a0a, 0.045);
+const menuCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+menuCamera.position.set(0, 1.6, 0);
 
-// ─── KEYBOARD INPUT ───────────────────────────────────────────────────────────
-const keys = {};
-window.addEventListener('keydown', e => { keys[e.code] = true;  });
-window.addEventListener('keyup',   e => { keys[e.code] = false; });
+// Ground
+const groundGeo = new THREE.PlaneGeometry(80, 80, 40, 40);
+const groundMat = new THREE.MeshBasicMaterial({ color: 0x0d0d0d, wireframe: true, opacity: 0.3, transparent: true });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+menuScene.add(ground);
 
-// ─── JUMP / GRAVITY ───────────────────────────────────────────────────────────
-let yVel = 0, onGround = true;
-const GRAVITY = 20, JUMP_SPEED = 7, GROUND_Y = 0;
+// Particles
+const PARTICLE_COUNT = 600;
+const positions = new Float32Array(PARTICLE_COUNT * 3);
+const velocities = [];
+for (let i = 0; i < PARTICLE_COUNT; i++) {
+  positions[i*3]   = (Math.random()-0.5)*40;
+  positions[i*3+1] = Math.random()*20-2;
+  positions[i*3+2] = (Math.random()-0.5)*40;
+  velocities.push({ x:(Math.random()-0.5)*0.01, y:-(0.005+Math.random()*0.015), z:(Math.random()-0.5)*0.005 });
+}
+const partGeo = new THREE.BufferGeometry();
+partGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+const partMat = new THREE.PointsMaterial({ color: 0x555555, size: 0.08, transparent: true, opacity: 0.6 });
+const particles = new THREE.Points(partGeo, partMat);
+menuScene.add(particles);
 
-window.addEventListener('keydown', e => {
-  if ((e.code === 'Space' || e.code === 'KeyJ') && onGround) {
-    yVel = JUMP_SPEED;
-    onGround = false;
-  }
-});
-
-// ─── WALL COLLISION (axis-separated sliding) ──────────────────────────────────
-const playerBox  = new THREE.Box3();
-const testBox    = new THREE.Box3();
-const PLAYER_R   = 0.45;
-const PLAYER_H   = 1.8;
-
-function overlapsWall(px, pz) {
-  const py = playerRig.position.y;
-  testBox.min.set(px - PLAYER_R, py,            pz - PLAYER_R);
-  testBox.max.set(px + PLAYER_R, py + PLAYER_H, pz + PLAYER_R);
-  for (let i = 0; i < wallBoxes.length; i++) {
-    if (testBox.intersectsBox(wallBoxes[i])) return true;
-  }
-  return false;
+const menuLights = [];
+for (let i = 0; i < 4; i++) {
+  const light = new THREE.PointLight(0xc0392b, 1.5, 12);
+  light.position.set((Math.random()-0.5)*20, 0.5+Math.random()*2, -5-Math.random()*15);
+  menuScene.add(light);
+  menuLights.push({ light, baseX: light.position.x, baseZ: light.position.z, t: Math.random()*Math.PI*2 });
 }
 
-function movePlayer(dx, dz) {
-  const nx = playerRig.position.x + dx;
-  const nz = playerRig.position.z + dz;
-
-  if (!overlapsWall(nx, nz)) {
-    playerRig.position.x = nx;
-    playerRig.position.z = nz;
-    return;
+const buildingMat = new THREE.MeshBasicMaterial({ color: 0x080808 });
+[[-18,3,-30],[-10,5,-35],[-4,7,-32],[4,4,-33],[12,6,-30],[20,3,-28]].forEach(([x,h,z]) => {
+  const w = 3+Math.random()*4;
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,2), buildingMat);
+  mesh.position.set(x, h/2-0.5, z);
+  menuScene.add(mesh);
+  for (let i = 0; i < Math.floor(Math.random()*4)+1; i++) {
+    const wmat = new THREE.MeshBasicMaterial({ color: 0xc0392b, opacity: 0.4+Math.random()*0.4, transparent: true });
+    const win = new THREE.Mesh(new THREE.PlaneGeometry(0.3,0.3), wmat);
+    win.position.set(x+(Math.random()-0.5)*w*0.7, Math.random()*h*0.7, z+1.1);
+    menuScene.add(win);
   }
-  if (!overlapsWall(nx, playerRig.position.z)) {
-    playerRig.position.x = nx;
-    return;
-  }
-  if (!overlapsWall(playerRig.position.x, nz)) {
-    playerRig.position.z = nz;
-    return;
-  }
-}
-
-// ─── SWORD (placeholder box until GLB loads) ──────────────────────────────────
-const swordHolder = new THREE.Object3D();
-camera.add(swordHolder);
-swordHolder.position.set(0.38, -0.38, -0.7);
-swordHolder.rotation.set(0, Math.PI / 2, -Math.PI / 2);
-
-// Placeholder sword box
-const swordPlaceholder = new THREE.Mesh(
-  new THREE.BoxGeometry(0.04, 0.7, 0.04),
-  new THREE.MeshLambertMaterial({ color: 0xaaaacc })
-);
-swordHolder.add(swordPlaceholder);
-
-// Swing state
-let swinging = false, swingT = 0;
-const SWING_DUR = 0.38; // seconds
-renderer.domElement.addEventListener('mousedown', e => {
-  if (e.button === 0 && !swinging) { swinging = true; swingT = 0; }
 });
 
-// ─── GLTF / FBX LOADERS ───────────────────────────────────────────────────────
-const gltfLoader = new GLTFLoader();
-const fbxLoader  = new FBXLoader();
+// ═══════════════════════════════════════════════════════════════════
+//  MAZE GENERATION (Recursive Backtracker per chunk)
+// ═══════════════════════════════════════════════════════════════════
+const CELL = 3;        // world-units per maze cell
+const CHUNK_CELLS = 8; // cells per chunk side
+const CHUNK_SIZE = CELL * CHUNK_CELLS;
+const RENDER_CHUNKS = 3; // chunks visible in each direction
 
-// Load sword GLB
-gltfLoader.load('3dmodels/sword.glb', (gltf) => {
-  swordHolder.remove(swordPlaceholder);
-  const s = gltf.scene;
-  s.scale.setScalar(0.8);
-  swordHolder.add(s);
-  s.traverse(c => { if (c.isMesh) { c.castShadow = true; } });
-}, undefined, () => { /* keep placeholder on error */ });
+const wallMat  = new THREE.MeshLambertMaterial({ color: 0x352020 });
+const floorMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+const ceilMat  = new THREE.MeshLambertMaterial({ color: 0x121212 });
 
-// ─── ZOMBIE ───────────────────────────────────────────────────────────────────
-const zombieGroup = new THREE.Group();
-zombieGroup.position.set(0, 0, -5);
-scene.add(zombieGroup);
+const WALL_H = 3.2;
+const WALL_T = 0.25;
 
-// Placeholder capsule until GLB loads
-const zombiePlaceholder = new THREE.Group();
-const bodyM = new THREE.Mesh(
-  new THREE.CapsuleGeometry(0.35, 1.1, 4, 8),
-  new THREE.MeshLambertMaterial({ color: 0x3a5c2a })
-);
-bodyM.position.y = 1.1;
-zombiePlaceholder.add(bodyM);
-const headM = new THREE.Mesh(
-  new THREE.SphereGeometry(0.28, 8, 8),
-  new THREE.MeshLambertMaterial({ color: 0x4a6a3a })
-);
-headM.position.y = 2.1;
-zombiePlaceholder.add(headM);
-zombieGroup.add(zombiePlaceholder);
+const loadedChunks = new Map(); // key: "cx,cz"
 
-// Animation state machine
-let zombieMixer   = null;
-let zombieActions = {};   // { idle, chase, die }
-let zombieState   = 'idle';
-let zombieDead    = false;
-let zombieHealth  = 100;
-
-function setZombieState(newState) {
-  if (zombieDead && newState !== 'die') return;
-  if (zombieState === newState) return;
-
-  const prev = zombieActions[zombieState];
-  const next = zombieActions[newState];
-
-  if (prev) prev.fadeOut(0.35);
-  if (next) { next.reset().fadeIn(0.35).play(); }
-
-  zombieState = newState;
-  if (newState === 'die') zombieDead = true;
-
-  const el = document.getElementById('zombie-label');
-  if (el) el.textContent = newState.toUpperCase();
+// Seeded RNG so same chunk always generates same maze
+function seededRNG(seed) {
+  let s = seed;
+  return function() {
+    s = (s * 1664525 + 1013904223) & 0xffffffff;
+    return (s >>> 0) / 4294967296;
+  };
 }
 
-// Load zombie GLB
-gltfLoader.load('3dmodels/zombie.glb', (gltf) => {
-  zombieGroup.remove(zombiePlaceholder);
-  const model = gltf.scene;
-  model.scale.setScalar(1.553);
-  model.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
-  zombieGroup.add(model);
+function generateMaze(rng) {
+  // Grid: 0=unvisited, walls tracked as booleans
+  const N = CHUNK_CELLS;
+  const visited = Array.from({length: N}, () => new Array(N).fill(false));
+  // walls[r][c] = { right: bool, bottom: bool }
+  const walls = Array.from({length: N}, () =>
+    Array.from({length: N}, () => ({ right: true, bottom: true }))
+  );
 
-  zombieMixer = new THREE.AnimationMixer(model);
-  loadZombieAnimations(zombieMixer);
-}, undefined, (err) => {
-  console.warn('zombie.glb not found, using placeholder', err);
-  loadZombieAnimations(null); // still load FBX clips even for placeholder
-});
+  const stack = [];
+  const startR = 0, startC = 0;
+  visited[startR][startC] = true;
+  stack.push([startR, startC]);
 
-function loadZombieAnimations(mixer) {
-  // Each FBX provides one clip. We retarget it onto the mixer's root.
-  const clips = [
-    { key: 'idle',  path: 'animations/zombie_idle.fbx'  },
-    { key: 'chase', path: 'animations/zombie_chase.fbx' },
-    { key: 'die',   path: 'animations/zombie_die.fbx'   },
-  ];
+  const dirs = [[0,1,'right'],[0,-1,'left'],[1,0,'bottom'],[-1,0,'top']];
 
-  clips.forEach(({ key, path }) => {
-    fbxLoader.load(path, (fbx) => {
-      if (!fbx.animations || fbx.animations.length === 0) {
-        console.warn(`No animation in ${path}`);
-        return;
+  while (stack.length > 0) {
+    const [r, c] = stack[stack.length - 1];
+    // Shuffle directions
+    const shuffled = dirs.slice().sort(() => rng() - 0.5);
+    let moved = false;
+    for (const [dr, dc, dir] of shuffled) {
+      const nr = r + dr, nc = c + dc;
+      if (nr >= 0 && nr < N && nc >= 0 && nc < N && !visited[nr][nc]) {
+        // Remove wall between (r,c) and (nr,nc)
+        if (dir === 'right')  walls[r][c].right  = false;
+        if (dir === 'left')   walls[nr][nc].right = false;
+        if (dir === 'bottom') walls[r][c].bottom  = false;
+        if (dir === 'top')    walls[nr][nc].bottom = false;
+        visited[nr][nc] = true;
+        stack.push([nr, nc]);
+        moved = true;
+        break;
       }
-      const clip = fbx.animations[0];
-      clip.name  = key;
+    }
+    if (!moved) stack.pop();
+  }
+  return walls;
+}
 
-      if (mixer) {
-        const action = mixer.clipAction(clip);
-        zombieActions[key] = action;
+function buildChunkMesh(cx, cz) {
+  const key = `${cx},${cz}`;
+  if (loadedChunks.has(key)) return;
 
-        if (key === 'die') {
-          action.setLoop(THREE.LoopOnce, 1);
-          action.clampWhenFinished = true;
+  const seed = ((cx * 73856093) ^ (cz * 19349663)) >>> 0;
+  const rng = seededRNG(seed);
+  const walls = generateMaze(rng);
+
+  const group = new THREE.Group();
+  const N = CHUNK_CELLS;
+  const ox = cx * CHUNK_SIZE;
+  const oz = cz * CHUNK_SIZE;
+
+  // Floor
+  const floorMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE),
+    floorMat
+  );
+  floorMesh.rotation.x = -Math.PI / 2;
+  floorMesh.position.set(ox + CHUNK_SIZE/2, 0, oz + CHUNK_SIZE/2);
+  group.add(floorMesh);
+
+  // Ceiling
+  const ceilMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE),
+    ceilMat
+  );
+  ceilMesh.rotation.x = Math.PI / 2;
+  ceilMesh.position.set(ox + CHUNK_SIZE/2, WALL_H, oz + CHUNK_SIZE/2);
+  group.add(ceilMesh);
+
+  // Helper: add wall segment
+  function addWall(wx, wz, len, rotY) {
+    const geo = new THREE.BoxGeometry(
+      rotY === 0 ? WALL_T : len,
+      WALL_H,
+      rotY === 0 ? len : WALL_T
+    );
+    const m = new THREE.Mesh(geo, wallMat);
+    m.position.set(wx, WALL_H/2, wz);
+    group.add(m);
+  }
+
+  // Outer border walls
+  addWall(ox,            WALL_H/2, CHUNK_SIZE, 0); // left border (z-axis)
+  // We'll generate per-cell walls instead and let chunk adjacency handle gaps
+
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const wx = ox + c * CELL;
+      const wz = oz + r * CELL;
+
+      // North wall of every first row cell (chunk border)
+      if (r === 0) {
+        addWall(wx + CELL/2, wz, CELL, 1);
+      }
+      // West wall of every first col cell (chunk border)
+      if (c === 0) {
+        addWall(wx, wz + CELL/2, CELL, 0);
+      }
+
+      // Right wall (east)
+      if (walls[r][c].right) {
+        addWall(wx + CELL, wz + CELL/2, CELL, 0);
+      }
+
+      // Bottom wall (south)
+      if (walls[r][c].bottom) {
+        addWall(wx + CELL/2, wz + CELL, CELL, 1);
+      }
+    }
+  }
+
+  // Occasional red emergency light
+  const lightCount = Math.floor(rng() * 3) + 1;
+  for (let i = 0; i < lightCount; i++) {
+    const lr = Math.floor(rng() * N);
+    const lc = Math.floor(rng() * N);
+    const light = new THREE.PointLight(0xff6a55, 2.8, 14);
+    light.position.set(ox + lc*CELL + CELL/2, WALL_H - 0.3, oz + lr*CELL + CELL/2);
+    group.add(light);
+
+    // Light fixture geometry
+    const fixture = new THREE.Mesh(
+      new THREE.BoxGeometry(0.15, 0.1, 0.15),
+      new THREE.MeshBasicMaterial({ color: 0xff7a66 })
+    );
+    fixture.position.copy(light.position);
+    group.add(fixture);
+  }
+
+  scene.add(group);
+  loadedChunks.set(key, group);
+}
+
+function removeChunk(cx, cz) {
+  const key = `${cx},${cz}`;
+  const group = loadedChunks.get(key);
+  if (!group) return;
+  scene.remove(group);
+  group.traverse(obj => {
+    if (obj.geometry) obj.geometry.dispose();
+  });
+  loadedChunks.delete(key);
+}
+
+function updateChunks() {
+  const px = playerRig.position.x;
+  const pz = playerRig.position.z;
+  const pcx = Math.floor(px / CHUNK_SIZE);
+  const pcz = Math.floor(pz / CHUNK_SIZE);
+
+  // Load needed chunks
+  for (let dx = -RENDER_CHUNKS; dx <= RENDER_CHUNKS; dx++) {
+    for (let dz = -RENDER_CHUNKS; dz <= RENDER_CHUNKS; dz++) {
+      buildChunkMesh(pcx + dx, pcz + dz);
+    }
+  }
+
+  // Unload far chunks
+  for (const [key, _] of loadedChunks) {
+    const [cx, cz] = key.split(',').map(Number);
+    if (Math.abs(cx - pcx) > RENDER_CHUNKS + 1 || Math.abs(cz - pcz) > RENDER_CHUNKS + 1) {
+      removeChunk(cx, cz);
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  COLLISION DETECTION (simple AABB against walls)
+// ═══════════════════════════════════════════════════════════════════
+function getWallsNear(px, pz, radius) {
+  // Returns AABB boxes of wall meshes nearby
+  const boxes = [];
+  loadedChunks.forEach(group => {
+    group.children.forEach(obj => {
+      if (obj.isMesh && obj.material === wallMat) {
+        const box = new THREE.Box3().setFromObject(obj);
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+        if (Math.abs(center.x - px) < radius && Math.abs(center.z - pz) < radius) {
+          boxes.push(box);
         }
-        if (key === 'idle') action.play(); // start playing idle immediately
       }
-
-      console.log(`Loaded animation: ${key}`);
-    }, undefined, (err) => {
-      console.warn(`Could not load ${path} — animation won't play`, err);
     });
   });
+  return boxes;
 }
 
-// ─── TABLE (GLB) ──────────────────────────────────────────────────────────────
-gltfLoader.load('3dmodels/table.glb', (gltf) => {
-  const t = gltf.scene;
-  t.position.set(2, 0, -3);
-  t.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
-  scene.add(t);
-}, undefined, () => {
-  // Fallback box table
-  const tbl = new THREE.Mesh(
-    new THREE.BoxGeometry(1.2, 0.8, 0.6),
-    new THREE.MeshLambertMaterial({ color: 0x7a4a1a })
-  );
-  tbl.position.set(2, 0.4, -3);
-  tbl.castShadow = true;
-  scene.add(tbl);
+function resolveCollision(newPos) {
+  const PR = 0.35; // player radius
+  const boxes = getWallsNear(newPos.x, newPos.z, 6);
+  for (const box of boxes) {
+    // Expand box by player radius
+    const expanded = box.clone();
+    expanded.min.x -= PR; expanded.max.x += PR;
+    expanded.min.z -= PR; expanded.max.z += PR;
+    if (newPos.x > expanded.min.x && newPos.x < expanded.max.x &&
+        newPos.z > expanded.min.z && newPos.z < expanded.max.z) {
+      // Push out on shortest axis
+      const ox1 = expanded.max.x - newPos.x;
+      const ox2 = newPos.x - expanded.min.x;
+      const oz1 = expanded.max.z - newPos.z;
+      const oz2 = newPos.z - expanded.min.z;
+      const minO = Math.min(ox1, ox2, oz1, oz2);
+      if (minO === ox1) newPos.x = expanded.max.x;
+      else if (minO === ox2) newPos.x = expanded.min.x;
+      else if (minO === oz1) newPos.z = expanded.max.z;
+      else newPos.z = expanded.min.z;
+    }
+  }
+  return newPos;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  INPUT
+// ═══════════════════════════════════════════════════════════════════
+const keys = {};
+let isLocked = false;
+let yaw = 0, pitch = 0;
+let gameActive = false;
+
+document.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'Escape' && gameActive) exitGame();
+});
+document.addEventListener('keyup',  e => { keys[e.code] = false; });
+
+// Pointer lock for desktop
+canvas.addEventListener('click', () => {
+  if (gameActive && !isLocked) canvas.requestPointerLock();
 });
 
-// ─── VR CONTROLLERS ───────────────────────────────────────────────────────────
-const controllerModelFactory = new XRControllerModelFactory();
-
-// Right controller → sword hand
-const controller1 = renderer.xr.getController(0);
-scene.add(controller1);
-const controllerGrip1 = renderer.xr.getControllerGrip(0);
-controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
-scene.add(controllerGrip1);
-
-// Left controller
-const controller2 = renderer.xr.getController(1);
-scene.add(controller2);
-const controllerGrip2 = renderer.xr.getControllerGrip(1);
-controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
-scene.add(controllerGrip2);
-
-// Attach sword to right controller in VR
-const vrSwordHolder = new THREE.Object3D();
-vrSwordHolder.rotation.set(0, Math.PI / 2, -Math.PI / 2);
-vrSwordHolder.position.set(0, 0, -0.1);
-controller1.add(vrSwordHolder);
-
-gltfLoader.load('3dmodels/sword.glb', (gltf) => {
-  const s = gltf.scene.clone();
-  s.scale.setScalar(0.8);
-  s.traverse(c => { if (c.isMesh) c.castShadow = true; });
-  vrSwordHolder.add(s);
-}, undefined, () => {
-  const fallback = new THREE.Mesh(
-    new THREE.BoxGeometry(0.04, 0.7, 0.04),
-    new THREE.MeshLambertMaterial({ color: 0xaaaacc })
-  );
-  vrSwordHolder.add(fallback);
+document.addEventListener('pointerlockchange', () => {
+  isLocked = document.pointerLockElement === canvas;
 });
 
-// VR swing on trigger squeeze
-controller1.addEventListener('selectstart', () => {
-  if (!swinging) { swinging = true; swingT = 0; }
+document.addEventListener('mousemove', e => {
+  if (!isLocked || !gameActive) return;
+  yaw   -= e.movementX * 0.002;
+  pitch -= e.movementY * 0.002;
+  pitch  = Math.max(-Math.PI/2.5, Math.min(Math.PI/2.5, pitch));
 });
 
-// ─── VR LOCOMOTION (thumbstick) ───────────────────────────────────────────────
-const vrMove = new THREE.Vector2();
-renderer.xr.addEventListener('sessionstart', () => {
-  const session = renderer.xr.getSession();
-  session.addEventListener('inputsourceschange', () => {});
-});
+// Mobile d-pad
+const padState = { fwd:false, back:false, left:false, right:false };
+function bindPad(id, key) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('touchstart', e => { e.preventDefault(); padState[key] = true; }, { passive: false });
+  el.addEventListener('touchend',   e => { e.preventDefault(); padState[key] = false; }, { passive: false });
+  el.addEventListener('mousedown',  () => padState[key] = true);
+  el.addEventListener('mouseup',    () => padState[key] = false);
+}
+bindPad('pad-fwd',   'fwd');
+bindPad('pad-back',  'back');
+bindPad('pad-left',  'left');
+bindPad('pad-right', 'right');
 
-function processVRInput(frame) {
-  if (!frame) return;
-  const session = renderer.xr.getSession();
-  if (!session) return;
-  for (const src of session.inputSources) {
+// Touch look (right half of screen)
+let touchLookId = null, touchLookLast = null;
+canvas.addEventListener('touchstart', e => {
+  for (const t of e.changedTouches) {
+    if (t.clientX > window.innerWidth * 0.5 && touchLookId === null) {
+      touchLookId = t.identifier;
+      touchLookLast = { x: t.clientX, y: t.clientY };
+    }
+  }
+}, { passive: true });
+
+canvas.addEventListener('touchmove', e => {
+  for (const t of e.changedTouches) {
+    if (t.identifier === touchLookId && touchLookLast) {
+      const dx = t.clientX - touchLookLast.x;
+      const dy = t.clientY - touchLookLast.y;
+      yaw   -= dx * 0.004;
+      pitch -= dy * 0.004;
+      pitch  = Math.max(-Math.PI/2.5, Math.min(Math.PI/2.5, pitch));
+      touchLookLast = { x: t.clientX, y: t.clientY };
+    }
+  }
+}, { passive: true });
+
+canvas.addEventListener('touchend', e => {
+  for (const t of e.changedTouches) {
+    if (t.identifier === touchLookId) { touchLookId = null; touchLookLast = null; }
+  }
+}, { passive: true });
+
+// ═══════════════════════════════════════════════════════════════════
+//  PLAYER MOVEMENT
+// ═══════════════════════════════════════════════════════════════════
+const SPEED = 4.5; // units/sec
+
+function updatePlayer(dt) {
+  if (!gameActive) return;
+
+  // Apply yaw to rig, pitch to camera
+  playerRig.rotation.y = yaw;
+  camera.rotation.x = pitch;
+
+  // Movement
+  const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+  const right   = new THREE.Vector3( Math.cos(yaw), 0, -Math.sin(yaw));
+
+  let move = new THREE.Vector3();
+  if (keys['KeyW'] || keys['ArrowUp']    || padState.fwd)   move.addScaledVector(forward,  1);
+  if (keys['KeyS'] || keys['ArrowDown']  || padState.back)  move.addScaledVector(forward, -1);
+  if (keys['KeyA'] || keys['ArrowLeft']  || padState.left)  move.addScaledVector(right,   -1);
+  if (keys['KeyD'] || keys['ArrowRight'] || padState.right) move.addScaledVector(right,    1);
+
+  if (move.lengthSq() > 0) {
+    move.normalize().multiplyScalar(SPEED * dt);
+    const newPos = playerRig.position.clone().add(move);
+    newPos.y = 0; // keep on ground
+    const resolved = resolveCollision(newPos);
+    playerRig.position.x = resolved.x;
+    playerRig.position.z = resolved.z;
+  }
+
+  // Update HUD coords
+  const cx = Math.floor(playerRig.position.x / CHUNK_SIZE);
+  const cz = Math.floor(playerRig.position.z / CHUNK_SIZE);
+  document.getElementById('coords').textContent =
+    `SECTOR ${cx},${cz}  //  ${playerRig.position.x.toFixed(1)}, ${playerRig.position.z.toFixed(1)}`;
+}
+
+function setLuminosity(value) {
+  luminosity = value;
+  renderer.toneMappingExposure = luminosity;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  VR SUPPORT (WebXR)
+// ═══════════════════════════════════════════════════════════════════
+let xrControllers = [];
+let vrComfortMode = true;
+
+// Check WebXR availability
+async function checkVRSupport() {
+  if (navigator.xr) {
+    try {
+      const supported = await navigator.xr.isSessionSupported('immersive-vr');
+      if (supported) {
+        vrSupported = true;
+        document.getElementById('vr-btn-wrap').classList.add('visible');
+        renderer.xr.enabled = true;
+      }
+    } catch(e) {
+      console.log('XR check failed:', e);
+    }
+  }
+}
+
+async function enterVR() {
+  if (!vrSupported) return;
+  try {
+    vrSession = await navigator.xr.requestSession('immersive-vr', {
+      requiredFeatures: ['local-floor'],
+      optionalFeatures: ['bounded-floor', 'hand-tracking']
+    });
+
+    renderer.xr.setSession(vrSession);
+    xrReferenceSpace = await vrSession.requestReferenceSpace('local-floor');
+
+    vrSession.addEventListener('end', () => {
+      vrSession = null;
+      renderer.xr.enabled = true; // keep enabled for next entry
+    });
+
+    // Set up VR controllers
+    for (let i = 0; i < 2; i++) {
+      const controller = renderer.xr.getController(i);
+      controller.addEventListener('selectstart', onVRSelectStart.bind(null, i));
+      controller.addEventListener('selectend',   onVRSelectEnd.bind(null, i));
+      playerRig.add(controller);
+      xrControllers[i] = controller;
+
+      // Controller visual
+      const cGeo = new THREE.CylinderGeometry(0.015, 0.025, 0.12, 8);
+      const cMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+      const cMesh = new THREE.Mesh(cGeo, cMat);
+      cMesh.rotation.x = -Math.PI / 4;
+      controller.add(cMesh);
+
+      // Ray pointer
+      const rayGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(0, 0, -3)
+      ]);
+      const rayMat = new THREE.LineBasicMaterial({ color: 0xc0392b, opacity: 0.4, transparent: true });
+      controller.add(new THREE.Line(rayGeo, rayMat));
+    }
+
+  } catch(e) {
+    console.error('VR session error:', e);
+  }
+}
+
+const vrMoveState = [false, false];
+function onVRSelectStart(i) { vrMoveState[i] = true; }
+function onVRSelectEnd(i)   { vrMoveState[i] = false; }
+
+// VR locomotion: left trigger = walk forward in head direction
+function updateVRMovement(dt) {
+  if (!renderer.xr || !renderer.xr.isPresenting) return;
+
+  const cam = renderer.xr.getCamera(camera);
+  if (!cam) return;
+
+  // Left controller trigger: move forward
+  if (vrMoveState[0]) {
+    const dir = new THREE.Vector3();
+    cam.getWorldDirection(dir);
+    dir.y = 0;
+    dir.normalize().multiplyScalar(SPEED * dt);
+    const newPos = playerRig.position.clone().add(dir);
+    const resolved = resolveCollision(newPos);
+    playerRig.position.x = resolved.x;
+    playerRig.position.z = resolved.z;
+  }
+
+  // Right controller trigger: teleport forward 2 cells (comfort mode)
+  // Handled via selectend for snap
+}
+
+// Snap turn on right thumbstick (comfort) - handled via gamepad polling
+let snapCooldown = 0;
+function pollVRGamepad(dt) {
+  if (!renderer.xr || !renderer.xr.isPresenting) return;
+  snapCooldown = Math.max(0, snapCooldown - dt);
+
+  const session = renderer.xr.getSession ? renderer.xr.getSession() : null;
+  const sources = session ? Array.from(session.inputSources || []) : [];
+
+  for (const src of sources) {
     if (!src.gamepad) continue;
     const axes = src.gamepad.axes;
+    if (src.handedness === 'right' && axes.length >= 4) {
+      const ax = axes[2]; // thumbstick X
+      if (Math.abs(ax) > 0.6 && snapCooldown <= 0) {
+        yaw -= Math.sign(ax) * (Math.PI / 4); // 45° snap
+        playerRig.rotation.y = yaw;
+        snapCooldown = 0.35;
+      }
+    }
+    // Left thumbstick smooth move
     if (src.handedness === 'left' && axes.length >= 4) {
-      vrMove.set(axes[2], axes[3]); // left thumbstick
+      const ax = axes[2], az = axes[3];
+      if (Math.abs(ax) > 0.2 || Math.abs(az) > 0.2) {
+        const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+        const right   = new THREE.Vector3( Math.cos(yaw), 0, -Math.sin(yaw));
+        let move = new THREE.Vector3();
+        move.addScaledVector(forward, -az * 0.8);
+        move.addScaledVector(right,    ax * 0.8);
+        if (move.lengthSq() > 0) {
+          move.normalize().multiplyScalar(SPEED * dt);
+          const newPos = playerRig.position.clone().add(move);
+          const resolved = resolveCollision(newPos);
+          playerRig.position.x = resolved.x;
+          playerRig.position.z = resolved.z;
+        }
+      }
     }
   }
 }
 
-// ─── PARTICLE BLOOD SPLASH (on hit) ───────────────────────────────────────────
-const bloodParticles = [];
-const bloodGeo = new THREE.BufferGeometry();
-const bCount   = 40;
-const bPositions = new Float32Array(bCount * 3);
-bloodGeo.setAttribute('position', new THREE.BufferAttribute(bPositions, 3));
-const bloodMat    = new THREE.PointsMaterial({ color: 0xcc0000, size: 0.08 });
-const bloodSystem = new THREE.Points(bloodGeo, bloodMat);
-bloodSystem.visible = false;
-scene.add(bloodSystem);
+// ═══════════════════════════════════════════════════════════════════
+//  GAME FLOW
+// ═══════════════════════════════════════════════════════════════════
+function startGame() {
+  gameActive = true;
+  document.getElementById('ui').style.display = 'none';
+  document.getElementById('scanlines').style.display = 'none';
+  document.getElementById('hud').classList.add('active');
+  document.getElementById('vr-btn-wrap').style.bottom = '2rem';
 
-let bloodActive = false, bloodT = 0;
-const bloodVels = Array.from({ length: bCount }, () => new THREE.Vector3(
-  (Math.random()-0.5)*4, Math.random()*5, (Math.random()-0.5)*4
-));
-
-function spawnBlood(pos) {
-  bloodSystem.position.copy(pos);
-  bloodSystem.position.y += 1.2;
-  for (let i = 0; i < bCount; i++) {
-    bPositions[i*3]   = 0;
-    bPositions[i*3+1] = 0;
-    bPositions[i*3+2] = 0;
+  // Show mobile controls on touch devices
+  if ('ontouchstart' in window) {
+    document.getElementById('move-pad').classList.add('active');
   }
-  bloodGeo.attributes.position.needsUpdate = true;
-  bloodSystem.visible = true;
-  bloodActive = true;
-  bloodT = 0;
+
+  // Initial chunk load
+  playerRig.position.set(CELL * 0.5, 0, CELL * 0.5);
+  updateChunks();
+
+  // Ambient rumble light
+  const ambLight = new THREE.AmbientLight(0x8a4b42, 1.6);
+  scene.add(ambLight);
 }
 
-// ─── TORCH FLICKER OBJECTS ────────────────────────────────────────────────────
-const torchLights = scene.children.filter(c => c.isPointLight);
+function exitGame() {
+  gameActive = false;
+  document.exitPointerLock();
+  if (vrSession) { vrSession.end(); }
+  document.getElementById('ui').style.display = 'flex';
+  document.getElementById('ui').style.opacity = '1';
+  document.getElementById('scanlines').style.display = 'block';
+  document.getElementById('hud').classList.remove('active');
+  document.getElementById('move-pad').classList.remove('active');
+}
 
-// ─── HIT DETECTION ────────────────────────────────────────────────────────────
-const swordWorldPos  = new THREE.Vector3();
-const zombieWorldPos = new THREE.Vector3();
+// ═══════════════════════════════════════════════════════════════════
+//  MAIN LOOP
+// ═══════════════════════════════════════════════════════════════════
+let lastTime = 0;
+let menuMouseX = 0, menuMouseY = 0;
+document.addEventListener('mousemove', e => {
+  if (gameActive) return;
+  menuMouseX = (e.clientX / window.innerWidth - 0.5) * 2;
+  menuMouseY = (e.clientY / window.innerHeight - 0.5) * 2;
+});
+document.addEventListener('touchmove', e => {
+  if (gameActive) return;
+  const t = e.touches[0];
+  menuMouseX = (t.clientX / window.innerWidth - 0.5) * 2;
+  menuMouseY = (t.clientY / window.innerHeight - 0.5) * 2;
+}, { passive: true });
 
-function checkSwordHit() {
-  if (!swinging || zombieDead) return;
-  // Get sword tip world position
-  swordHolder.getWorldPosition(swordWorldPos);
-  swordWorldPos.y += 0.35; // tip offset
-  zombieGroup.getWorldPosition(zombieWorldPos);
-  zombieWorldPos.y += 1.0;
-  const dist = swordWorldPos.distanceTo(zombieWorldPos);
-  if (dist < 1.8) {
-    zombieHealth -= 34;
-    spawnBlood(zombieWorldPos);
-    showMsg('HIT! ' + Math.max(0, zombieHealth) + ' HP');
-    if (zombieHealth <= 0) {
-      setZombieState('die');
-      showMsg('ZOMBIE SLAIN!');
+let menuClock = 0;
+
+function animate(timestamp) {
+  const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
+  lastTime = timestamp;
+  menuClock += dt;
+
+  if (!gameActive) {
+    // Menu animation
+    menuCamera.position.x += (menuMouseX * 1.5 - menuCamera.position.x) * 0.04;
+    menuCamera.position.y += (1.6 - menuMouseY * 0.5 - menuCamera.position.y) * 0.04;
+    menuCamera.lookAt(menuCamera.position.x * 0.2, menuCamera.position.y * 0.2, -10);
+
+    const pos = partGeo.attributes.position.array;
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      pos[i*3]   += velocities[i].x;
+      pos[i*3+1] += velocities[i].y;
+      pos[i*3+2] += velocities[i].z;
+      if (pos[i*3+1] < -1) {
+        pos[i*3+1] = 18;
+        pos[i*3]   = (Math.random()-0.5)*40;
+        pos[i*3+2] = (Math.random()-0.5)*40;
+      }
+    }
+    partGeo.attributes.position.needsUpdate = true;
+
+    menuLights.forEach((lObj, i) => {
+      menuLights[i].t += 0.04 + i * 0.01;
+      lObj.light.intensity = 1.0 + Math.sin(lObj.t*7)*0.5 + Math.sin(lObj.t*13)*0.3;
+    });
+
+    renderer.render(menuScene, menuCamera);
+
+  } else {
+    // Game
+    updatePlayer(dt);
+    updateVRMovement(dt);
+    pollVRGamepad(dt);
+    updateChunks();
+
+    // Flicker in-maze lights every frame
+    scene.traverse(obj => {
+      if (obj.isPointLight) {
+        obj.intensity = 2.2 + Math.sin(menuClock * (7 + obj.position.x)) * 0.6
+                            + Math.sin(menuClock * (13 + obj.position.z)) * 0.35;
+      }
+    });
+
+    if (renderer.xr && renderer.xr.isPresenting) {
+      renderer.render(scene, camera); // XR handles stereo internally
+    } else {
+      renderer.render(scene, camera);
     }
   }
 }
 
-// ─── MESSAGE HELPER ───────────────────────────────────────────────────────────
-let msgTimer = null;
-function showMsg(txt) {
-  const el = document.getElementById('msg');
-  if (!el) return;
-  el.textContent = txt;
-  el.style.opacity = '1';
-  clearTimeout(msgTimer);
-  msgTimer = setTimeout(() => { el.style.opacity = '0'; }, 1800);
+// Use XR-aware animation loop
+renderer.setAnimationLoop(animate);
+
+// ═══════════════════════════════════════════════════════════════════
+//  BLOOD DRIPS
+// ═══════════════════════════════════════════════════════════════════
+const dripsContainer = document.getElementById('drips');
+for (let i = 0; i < 14; i++) {
+  const d = document.createElement('div');
+  d.className = 'drip';
+  const h = 20 + Math.random() * 40;
+  d.style.setProperty('--drip-h', h + 'px');
+  d.style.animationDuration = (3 + Math.random() * 6) + 's';
+  d.style.animationDelay = (Math.random() * 8) + 's';
+  dripsContainer.appendChild(d);
 }
 
-// ─── KILL KEY ─────────────────────────────────────────────────────────────────
-window.addEventListener('keydown', e => {
-  if (e.code === 'KeyK' && !zombieDead) {
-    zombieHealth = 0;
-    setZombieState('die');
-    showMsg('ZOMBIE SLAIN!');
+// ═══════════════════════════════════════════════════════════════════
+//  UI BINDINGS
+// ═══════════════════════════════════════════════════════════════════
+document.getElementById('btn-play').addEventListener('click', () => {
+  const uiEl = document.getElementById('ui');
+  uiEl.style.transition = 'opacity 0.5s';
+  uiEl.style.opacity = '0';
+  setTimeout(startGame, 500);
+});
+
+document.getElementById('escape-hint').addEventListener('click', exitGame);
+
+const modal = document.getElementById('settings-modal');
+document.getElementById('btn-settings').addEventListener('click', () => modal.classList.add('open'));
+document.getElementById('btn-close-settings').addEventListener('click', () => modal.classList.remove('open'));
+modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('open'); });
+
+['master', 'sfx'].forEach(id => {
+  const slider = document.getElementById('vol-' + id);
+  const val = document.getElementById('vol-' + id + '-val');
+  slider.addEventListener('input', () => { val.textContent = slider.value; });
+});
+
+document.querySelectorAll('.toggle').forEach(t => {
+  t.addEventListener('click', () => {
+    t.classList.toggle('on');
+    if (t.id === 'toggle-vr-comfort') vrComfortMode = t.classList.contains('on');
+  });
+});
+
+document.getElementById('btn-enter-vr').addEventListener('click', () => {
+  if (!gameActive) {
+    // Start game then enter VR
+    const uiEl = document.getElementById('ui');
+    uiEl.style.transition = 'opacity 0.5s';
+    uiEl.style.opacity = '0';
+    setTimeout(() => { startGame(); enterVR(); }, 500);
+  } else {
+    enterVR();
   }
 });
 
-// ─── PLAYER HEALTH ────────────────────────────────────────────────────────────
-let playerHealth = 100;
-let lastAttackTime = 0;
-const ATTACK_COOLDOWN = 1.2; // seconds between zombie hits
-
-function damagePlayer(dt) {
-  const now = performance.now() / 1000;
-  if (now - lastAttackTime < ATTACK_COOLDOWN) return;
-  lastAttackTime = now;
-  playerHealth = Math.max(0, playerHealth - 15);
-  const bar = document.getElementById('health-bar');
-  if (bar) bar.style.width = playerHealth + '%';
-  // Red flash
-  const flash = document.createElement('div');
-  flash.style.cssText = 'position:fixed;inset:0;background:rgba(200,0,0,0.35);pointer-events:none;z-index:999;transition:opacity 0.4s';
-  document.body.appendChild(flash);
-  setTimeout(() => { flash.style.opacity = '0'; }, 50);
-  setTimeout(() => flash.remove(), 500);
-  if (playerHealth <= 0) showMsg('YOU DIED...');
-  else showMsg('OUCH! ' + playerHealth + ' HP');
-}
-
-
-const CHASE_RANGE  = 12;
-const ATTACK_RANGE = 2;
-const ZOMBIE_SPEED = 0.04;
-const zombieDir    = new THREE.Vector3();
-const playerPos    = new THREE.Vector3();
-
-function updateZombieAI(dt) {
-  if (zombieDead) return;
-  playerRig.getWorldPosition(playerPos);
-  zombieGroup.getWorldPosition(zombieWorldPos);
-
-  zombieDir.subVectors(playerPos, zombieWorldPos);
-  zombieDir.y = 0;
-  const dist = zombieDir.length();
-
-  if (dist > CHASE_RANGE) {
-    setZombieState('idle');
-  } else if (dist > ATTACK_RANGE) {
-    setZombieState('chase');
-    zombieDir.normalize();
-    zombieGroup.position.addScaledVector(zombieDir, ZOMBIE_SPEED);
-    zombieGroup.lookAt(playerPos.x, zombieGroup.position.y, playerPos.z);
-  } else {
-    // In attack range — zombie attacks player
-    setZombieState('chase');
-    zombieGroup.lookAt(playerPos.x, zombieGroup.position.y, playerPos.z);
-    damagePlayer(dt);
-  }
-}
-
-// ─── PLAYER MOVEMENT ──────────────────────────────────────────────────────────
-const moveDir  = new THREE.Vector3();
-const camFwd   = new THREE.Vector3();
-const camRight = new THREE.Vector3();
-
-function updatePlayerMovement(dt) {
-  // Desktop keyboard
-  const forward = (keys['KeyW'] || keys['ArrowUp'])    ? 1 : 0;
-  const back    = (keys['KeyS'] || keys['ArrowDown'])  ? 1 : 0;
-  const left    = (keys['KeyA'] || keys['ArrowLeft'])  ? 1 : 0;
-  const right   = (keys['KeyD'] || keys['ArrowRight']) ? 1 : 0;
-
-  // Derive forward/right from camera yaw only (not pitch)
-  camFwd.set(Math.sin(yaw + Math.PI), 0, Math.cos(yaw + Math.PI));
-  camRight.set(Math.cos(yaw), 0, -Math.sin(yaw));
-
-  moveDir.set(0, 0, 0);
-  moveDir.addScaledVector(camFwd,   forward - back);
-  moveDir.addScaledVector(camRight, right   - left);
-
-  // VR thumbstick
-  if (renderer.xr.isPresenting && vrMove.lengthSq() > 0.01) {
-    const refSpace = renderer.xr.getReferenceSpace();
-    const hmdFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-    hmdFwd.y = 0; hmdFwd.normalize();
-    const hmdRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-    hmdRight.y = 0; hmdRight.normalize();
-    moveDir.addScaledVector(hmdFwd,   -vrMove.y);
-    moveDir.addScaledVector(hmdRight,  vrMove.x);
-  }
-
-  if (moveDir.lengthSq() > 0) {
-    moveDir.normalize();
-    const speed = 4.5;
-    movePlayer(moveDir.x * speed * dt, moveDir.z * speed * dt);
-  }
-
-  // Gravity + jump
-  if (!onGround) {
-    yVel -= GRAVITY * dt;
-    playerRig.position.y += yVel * dt;
-    if (playerRig.position.y <= GROUND_Y) {
-      playerRig.position.y = GROUND_Y;
-      yVel = 0;
-      onGround = true;
-    }
-  }
-}
-
-// ─── SWORD SWING ANIMATION ────────────────────────────────────────────────────
-const SWING_ROTATION_START = new THREE.Euler(0, 0, 0);
-let hitCheckedThisSwing = false;
-
-function updateSwordSwing(dt) {
-  if (!swinging) return;
-  swingT += dt / SWING_DUR;
-
-  if (swingT < 1) {
-    // Arc: rotate forward then back
-    const t = swingT;
-    const arc = Math.sin(t * Math.PI); // 0→1→0
-    swordHolder.rotation.x = -arc * 1.4; // swing forward
-    swordHolder.rotation.z = arc * 0.3;  // slight diagonal
-    // Check hit at peak
-    if (t > 0.35 && t < 0.65 && !hitCheckedThisSwing) {
-      hitCheckedThisSwing = true;
-      checkSwordHit();
-    }
-  } else {
-    swordHolder.rotation.x = 0;
-    swordHolder.rotation.z = 0;
-    swinging = false;
-    hitCheckedThisSwing = false;
-  }
-}
-
-// ─── CLOCK ────────────────────────────────────────────────────────────────────
-const clock = new THREE.Clock();
-
-// ─── START BUTTON ─────────────────────────────────────────────────────────────
-document.getElementById('start-btn').addEventListener('click', () => {
-  document.getElementById('overlay').style.display = 'none';
-  renderer.domElement.requestPointerLock?.();
-  clock.start();
-});
-
-// ─── RESIZE ───────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+//  RESIZE
+// ═══════════════════════════════════════════════════════════════════
 window.addEventListener('resize', () => {
+  renderer.setSize(window.innerWidth, window.innerHeight);
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  menuCamera.aspect = window.innerWidth / window.innerHeight;
+  menuCamera.updateProjectionMatrix();
 });
 
-// ─── RENDER LOOP ──────────────────────────────────────────────────────────────
-renderer.setAnimationLoop((timestamp, frame) => {
-  const dt = Math.min(clock.getDelta(), 0.05);
-
-  processVRInput(frame);
-  updatePlayerMovement(dt);
-  updateSwordSwing(dt);
-  updateZombieAI(dt);
-
-  // Advance zombie animation mixer
-  if (zombieMixer) zombieMixer.update(dt);
-
-  // Torch flicker
-  const t = performance.now() * 0.001;
-  scene.children.forEach(c => {
-    if (c.isPointLight && c.userData.baseIntensity !== undefined) {
-      c.userData.flicker += dt * 8;
-      const flicker = c.userData.flicker;
-      c.intensity = c.userData.baseIntensity
-        + Math.sin(flicker * 3.7) * 0.4
-        + Math.sin(flicker * 7.1) * 0.2;
-    }
-  });
-
-  // Blood particle update
-  if (bloodActive) {
-    bloodT += dt;
-    for (let i = 0; i < bCount; i++) {
-      bPositions[i*3]   += bloodVels[i].x * dt;
-      bPositions[i*3+1] += (bloodVels[i].y - 9.8 * bloodT) * dt;
-      bPositions[i*3+2] += bloodVels[i].z * dt;
-    }
-    bloodGeo.attributes.position.needsUpdate = true;
-    if (bloodT > 1.0) {
-      bloodSystem.visible = false;
-      bloodActive = false;
-    }
-  }
-
-  // In VR mode, sync rig position to XR camera rig
-  if (renderer.xr.isPresenting) {
-    // XR handles camera transforms; keep HUD elements in scene
-  }
-
-  renderer.render(scene, camera);
-});
-
+// ═══════════════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════════════
+checkVRSupport();
 </script>
 </body>
 </html>
